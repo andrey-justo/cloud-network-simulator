@@ -1,5 +1,9 @@
 # POC Executado: Análise de Implementação
 
+> Historical results: bundled B0 Bicep files and automatic baseline validation
+> were removed on 2026-10-25. See the [current guide](POC_GUIDE.md); synthetic
+> results below are not live experiment evidence.
+
 **Data**: 2026-09-05  
 **Workspace**: `C:\Users\Andrey Victor Justo\workspace\network-simulation`  
 **Status**: ✅ POC Executada com Sucesso

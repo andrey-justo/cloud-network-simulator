@@ -67,7 +67,7 @@ class NetworkScenarioMetrics:
     architecture_adherence: float = 0.0  # (satisfied / total) * 100
     
     # Metadata
-    iterations_to_acceptance: int = 0
+    iterations_to_acceptance: Optional[int] = None
     total_execution_time_seconds: float = 0.0
     
     def calculate_metrics(self):
@@ -146,7 +146,12 @@ class MetricAnalyzer:
                 "acceptance_rate_delta": metrics_2.acceptance_rate - metrics_1.acceptance_rate,
                 "connectivity_correctness_delta": metrics_2.connectivity_correctness - metrics_1.connectivity_correctness,
                 "architecture_adherence_delta": metrics_2.architecture_adherence - metrics_1.architecture_adherence,
-                "iterations_delta": metrics_1.iterations_to_acceptance - metrics_2.iterations_to_acceptance,
+                "iterations_delta": (
+                    metrics_1.iterations_to_acceptance - metrics_2.iterations_to_acceptance
+                    if metrics_1.iterations_to_acceptance is not None
+                    and metrics_2.iterations_to_acceptance is not None
+                    else None
+                ),
                 "time_delta": metrics_1.total_execution_time_seconds - metrics_2.total_execution_time_seconds,
             },
             "hypothesis_tests": {
@@ -157,7 +162,12 @@ class MetricAnalyzer:
                     else None
                 ),
                 "h2_acceptance_improvement": metrics_2.acceptance_rate > metrics_1.acceptance_rate,
-                "h3_efficiency": metrics_1.total_execution_time_seconds > metrics_2.total_execution_time_seconds,
+                "h3_efficiency": (
+                    metrics_1.total_execution_time_seconds > metrics_2.total_execution_time_seconds
+                    if metrics_1.iterations_to_acceptance is not None
+                    and metrics_2.iterations_to_acceptance is not None
+                    else None
+                ),
             }
         }
     
@@ -185,7 +195,14 @@ class MetricAnalyzer:
         ]
         acceptance_deltas = [c["comparison"]["acceptance_rate_delta"] for c in comparisons]
         connectivity_deltas = [c["comparison"]["connectivity_correctness_delta"] for c in comparisons]
-        iterations_deltas = [c["comparison"]["iterations_delta"] for c in comparisons]
+        iterations_deltas = [
+            c["comparison"]["iterations_delta"] for c in comparisons
+            if c["comparison"]["iterations_delta"] is not None
+        ]
+        h3_results = [
+            c["hypothesis_tests"]["h3_efficiency"] for c in comparisons
+            if c["hypothesis_tests"]["h3_efficiency"] is not None
+        ]
         
         # Calcular estatísticas
         return {
@@ -206,7 +223,7 @@ class MetricAnalyzer:
                 "details": connectivity_deltas
             },
             "iterations_to_acceptance": {
-                "mean_reduction": statistics.mean(iterations_deltas),
+                "mean_reduction": statistics.mean(iterations_deltas) if iterations_deltas else None,
                 "stdev": statistics.stdev(iterations_deltas) if len(iterations_deltas) > 1 else 0,
                 "details": iterations_deltas
             },
@@ -230,9 +247,7 @@ class MetricAnalyzer:
                 "h2_supported": sum(
                     c["hypothesis_tests"]["h2_acceptance_improvement"] for c in comparisons
                 ) / len(comparisons),
-                "h3_supported": sum(
-                    c["hypothesis_tests"]["h3_efficiency"] for c in comparisons
-                ) / len(comparisons),
+                "h3_supported": sum(h3_results) / len(h3_results) if h3_results else None,
             }
         }
     

@@ -1,0 +1,26 @@
+poc:
+  name: Controlled Azure network IaC study - cloud planning example
+experiment:
+  phase: main
+  scenarios: [NET-01, NET-02, NET-03, NET-04, NET-05, NET-06, NET-07, NET-08, NET-09, NET-10]
+  output_directory: results
+study:
+  repetitions: 1
+  max_iterations: 5
+  random_seed: 1729
+  bootstrap_samples: 2000
+llm:
+  model: gpt-5.3-codex
+  max_tokens: 8000
+validation:
+  bicep_syntax: true
+  checkov: true
+  opa: true
+cloud:
+  enabled: true
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+  location: ""
+  resource_group_prefix: iac-study
+  parameters_file: deployment-parameters.example.json
+  runtime_bindings_file: runtime-bindings.example.json
+  cleanup: true

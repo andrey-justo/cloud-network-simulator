@@ -56,7 +56,7 @@ class NetworkScenarioMetrics:
     architecture_requirements: List[ArchitectureMetric] = field(default_factory=list)
     architecture_adherence: float = 0.0
 
-    iterations_to_acceptance: int = 0
+    iterations_to_acceptance: int | None = None
     total_execution_time_seconds: float = 0.0
 
     def calculate_metrics(self) -> None:
@@ -122,7 +122,7 @@ class NetworkScenarioMetrics:
         acceptance_criteria_met: int = 0,
         connectivity_tests: Optional[List[ConnectivityMetric]] = None,
         architecture_requirements: Optional[List[ArchitectureMetric]] = None,
-        iterations_to_acceptance: int = 0,
+        iterations_to_acceptance: int | None = None,
         total_execution_time_seconds: float = 0.0,
     ) -> "NetworkScenarioMetrics":
         metrics = cls(

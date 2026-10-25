@@ -1,5 +1,9 @@
 # Quick Reference Card
 
+> Historical reference: bundled B0 Bicep files and automatic baseline validation
+> were removed on 2026-10-25. Commands below that use `templates/bicep` are obsolete.
+> Use the [current setup and artifact workflow](README.md) instead.
+
 **Workspace**: `C:\Users\Andrey Victor Justo\workspace\network-simulation`  
 **Print-friendly**: ✅ Salve como PDF para consulta rápida
 

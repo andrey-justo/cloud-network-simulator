@@ -1,5 +1,9 @@
 # Resumo Executivo: POC de IaC com Validação Automatizada e Suporte de LLM
 
+> Historical summary: bundled B0 Bicep files and automatic baseline validation
+> were removed on 2026-10-25. See the [current artifact workflow](README.md);
+> synthetic results below are not live experiment evidence.
+
 **Data**: 2026-09-05 | **Status**: ✅ Completo e Executado
 
 ---

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
-import importlib.util
 import json
 import shutil
 import subprocess
@@ -17,7 +16,9 @@ from uuid import uuid4
 import yaml
 
 from network_simulation.configuration import POCConfig
+from network_simulation.scenario_context import resolve_scenario_context
 from network_simulation.validation.bicep_compiler import BicepCompiler
+from network_simulation.validation.checkov_validator import CheckovValidator, is_checkov_available
 from network_simulation.validation.conftest_validator import ConftestValidator
 
 
@@ -100,6 +101,7 @@ class LiveExperimentRunner:
             "mode": "live",
             "provider": self.config.llm.provider,
             "model": self.config.llm.model_name,
+            "generation_settings": self.config.llm.generation_settings,
             "endpoint_host": endpoint.hostname,
             "endpoint_path": endpoint.path,
             "endpoint_api_version": parse_qs(endpoint.query).get(
@@ -183,13 +185,10 @@ class LiveExperimentRunner:
             errors.append("Enable at least one automated validator before running.")
         if validation.validate_bicep_syntax and not self.bicep_compiler.executable:
             errors.append("Bicep CLI is not available on PATH.")
-        checkov_available = (
-            self.checkov_validator
-            or shutil.which("checkov")
-            or importlib.util.find_spec("checkov.main")
-        )
-        if validation.run_checkov and not checkov_available:
+        if validation.run_checkov and self.checkov_validator is None and not is_checkov_available():
             errors.append("Neither the Checkov CLI nor its Python package is available.")
+        if (validation.run_checkov or validation.run_opa_policies) and not validation.validate_bicep_syntax:
+            errors.append("Bicep compilation must be enabled for Checkov or OPA validation.")
         if validation.run_opa_policies:
             policy_dir = self.workspace / validation.opa_policies_dir
             if not list(policy_dir.glob("*.rego")):
@@ -242,9 +241,23 @@ class LiveExperimentRunner:
         if not spec_path.is_file():
             return {"status": "failed_missing_scenario", "error": str(spec_path)}
 
-        scenario = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
+        source_specs: dict[str, str] = {}
+
+        def load_spec(key: str) -> dict[str, Any]:
+            path = self.workspace / "scenarios" / "specs" / f"{key}.yml"
+            source_specs[key] = path.read_text(encoding="utf-8")
+            return yaml.safe_load(source_specs[key])
+
+        try:
+            scenario = resolve_scenario_context(scenario_id, load_spec)
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            return {"status": "failed_invalid_scenario", "error": str(error)}
         scenario_directory = run_directory / "scenarios" / scenario_id
         scenario_directory.mkdir(parents=True, exist_ok=True)
+        source_directory = scenario_directory / "sources"
+        source_directory.mkdir(exist_ok=True)
+        for key, text in source_specs.items():
+            (source_directory / f"{key}.yml").write_text(text, encoding="utf-8")
         spec_text = yaml.safe_dump(scenario, sort_keys=False, allow_unicode=True)
         (scenario_directory / "specification.yml").write_text(spec_text, encoding="utf-8")
         spec_hash = _sha256(spec_text)
@@ -280,6 +293,8 @@ class LiveExperimentRunner:
             "status": status,
             "name": scenario.get("name", scenario_id),
             "specification_sha256": spec_hash,
+            "source_sha256": {key: _sha256(text) for key, text in source_specs.items()},
+            "context_chain": scenario["context_chain"],
             "scenario_acceptance": "not_automated",
             "conditions": conditions,
         }
@@ -303,6 +318,7 @@ class LiveExperimentRunner:
         iterations: list[dict[str, Any]] = []
         validation_feedback = ""
         latest_passed = False
+        previous_template = ""
 
         for iteration_number in range(1, max_iterations + 1):
             iteration_directory = condition_directory / f"iteration-{iteration_number:02d}"
@@ -313,6 +329,8 @@ class LiveExperimentRunner:
             else:
                 prompt = (
                     prompts["iterative"].format(validation_failures=validation_feedback)
+                    + "\n\nScenario specification (YAML):\n"
+                    + spec_text
                     + "\n\nCurrent Bicep template:\n"
                     + previous_template
                     + "\nRevise it and return only the complete Bicep template."
@@ -356,68 +374,7 @@ class LiveExperimentRunner:
             }
             _write_json(iteration_directory / "generation.json", generation)
 
-            validation: dict[str, Any] = {}
-            compiled_path = iteration_directory / "template.json"
-            if self.config.validation.validate_bicep_syntax:
-                validation["bicep"] = self.bicep_compiler.validate(
-                    template_path,
-                    compiled_path,
-                )
-            else:
-                validation["bicep"] = {"status": "disabled"}
-
-            if self.config.validation.run_checkov:
-                if validation["bicep"]["status"] == "passed":
-                    try:
-                        checkov = self.checkov_validator
-                        if checkov is None:
-                            from validation.checkov_validator import CheckovValidator
-
-                            checkov = CheckovValidator(framework="arm")
-                        report = checkov.validate_template(
-                            str(compiled_path),
-                            scenario_id=scenario_id,
-                        )
-                        report_data = asdict(report) if is_dataclass(report) else dict(report)
-                        report_failed = (
-                            report.failed if is_dataclass(report) else report_data.get("failed", 0)
-                        )
-                        validation["checkov"] = {
-                            **report_data,
-                            "status": (
-                                "passed"
-                                if report_failed == 0
-                                and report_data.get("parsing_errors", 0) == 0
-                                else "failed"
-                            ),
-                        }
-                    except Exception as error:
-                        validation["checkov"] = {
-                            "status": "unavailable_or_failed",
-                            "error": str(error),
-                        }
-                else:
-                    validation["checkov"] = {
-                        "status": "not_run",
-                        "reason": "Bicep compilation did not pass.",
-                    }
-            else:
-                validation["checkov"] = {"status": "disabled"}
-
-            if self.config.validation.run_opa_policies:
-                if validation["bicep"]["status"] == "passed":
-                    validation["conftest"] = self.conftest_validator.validate(
-                        compiled_path,
-                        self.workspace / self.config.validation.opa_policies_dir,
-                    )
-                else:
-                    validation["conftest"] = {
-                        "status": "not_run",
-                        "reason": "Bicep compilation did not pass.",
-                    }
-            else:
-                validation["conftest"] = {"status": "disabled"}
-
+            validation = self.validate_candidate(template_path, scenario_id)
             automated_checks_passed = all(
                 validation[name]["status"] in {"passed", "disabled"}
                 for name in ("bicep", "checkov", "conftest")
@@ -468,3 +425,59 @@ class LiveExperimentRunner:
         }
         _write_json(condition_directory / "result.json", condition_result)
         return condition_result
+
+    def validate_candidate(self, template_path: Path, scenario_id: str) -> dict[str, Any]:
+        validation: dict[str, Any] = {}
+        compiled_path = template_path.parent / "template.json"
+        if self.config.validation.validate_bicep_syntax:
+            validation["bicep"] = self.bicep_compiler.validate(template_path, compiled_path)
+        else:
+            validation["bicep"] = {"status": "disabled"}
+
+        if self.config.validation.run_checkov:
+            if validation["bicep"]["status"] == "passed":
+                try:
+                    checkov = self.checkov_validator
+                    if checkov is None:
+                        checkov = CheckovValidator(framework="arm")
+                    report = checkov.validate_template(str(compiled_path), scenario_id=scenario_id)
+                    report_data = asdict(report) if is_dataclass(report) else dict(report)
+                    counts = {
+                        name: report_data.get(name)
+                        for name in ("passed", "failed", "skipped", "total_checks")
+                    }
+                    counts["parsing_errors"] = report_data.get("parsing_errors", 0)
+                    if any(type(value) is not int or value < 0 for value in counts.values()):
+                        raise ValueError("Checkov report has missing or invalid check counts.")
+                    if counts["total_checks"] != counts["passed"] + counts["failed"] + counts["skipped"]:
+                        raise ValueError("Checkov report has inconsistent check counts.")
+                    if counts["failed"] or counts["parsing_errors"]:
+                        checkov_status = "failed"
+                    elif counts["passed"] == 0:
+                        checkov_status = "no_checks_executed"
+                    else:
+                        checkov_status = "passed"
+                    validation["checkov"] = {**report_data, "status": checkov_status}
+                except Exception as error:
+                    validation["checkov"] = {
+                        "status": "unavailable_or_failed", "error": str(error),
+                    }
+            else:
+                validation["checkov"] = {
+                    "status": "not_run", "reason": "Bicep compilation did not pass.",
+                }
+        else:
+            validation["checkov"] = {"status": "disabled"}
+
+        if self.config.validation.run_opa_policies:
+            if validation["bicep"]["status"] == "passed":
+                validation["conftest"] = self.conftest_validator.validate(
+                    compiled_path, self.workspace / self.config.validation.opa_policies_dir,
+                )
+            else:
+                validation["conftest"] = {
+                    "status": "not_run", "reason": "Bicep compilation did not pass.",
+                }
+        else:
+            validation["conftest"] = {"status": "disabled"}
+        return validation

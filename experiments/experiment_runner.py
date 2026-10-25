@@ -60,8 +60,8 @@ class ScenarioExperimentResult:
     b1_acceptance_rate: float = 0.0  # Taxa de configs aceitas sem validação
     t1_acceptance_rate: float = 0.0  # Taxa de configs aceitas com validação
     
-    b1_avg_iterations: float = 0.0   # Média de iterações para B1 chegar a aceito
-    t1_avg_iterations: float = 0.0   # Média de iterações para T1 chegar a aceito
+    b1_avg_iterations: int | None = None
+    t1_avg_iterations: int | None = None
     
     b1_avg_violations: float = 0.0   # Média de violações em B1
     t1_avg_violations: float = 0.0   # Média de violações em T1
@@ -78,7 +78,9 @@ class ScenarioExperimentResult:
         if self.b1_iterations:
             accepted_b1 = sum(1 for it in self.b1_iterations if it.validation_passed)
             self.b1_acceptance_rate = (accepted_b1 / len(self.b1_iterations)) * 100
-            self.b1_avg_iterations = len(self.b1_iterations) / max(accepted_b1, 1)
+            self.b1_avg_iterations = next(
+                (it.iteration_num for it in self.b1_iterations if it.validation_passed), None
+            )
             self.b1_avg_violations = sum(
                 it.total_violations for it in self.b1_iterations
             ) / len(self.b1_iterations)
@@ -87,7 +89,9 @@ class ScenarioExperimentResult:
         if self.t1_iterations:
             accepted_t1 = sum(1 for it in self.t1_iterations if it.validation_passed)
             self.t1_acceptance_rate = (accepted_t1 / len(self.t1_iterations)) * 100
-            self.t1_avg_iterations = len(self.t1_iterations) / max(accepted_t1, 1)
+            self.t1_avg_iterations = next(
+                (it.iteration_num for it in self.t1_iterations if it.validation_passed), None
+            )
             self.t1_avg_violations = sum(
                 it.total_violations for it in self.t1_iterations
             ) / len(self.t1_iterations)
@@ -99,8 +103,10 @@ class ScenarioExperimentResult:
         return self.t1_acceptance_rate - self.b1_acceptance_rate
     
     @property
-    def improvement_iterations(self) -> float:
+    def improvement_iterations(self) -> int | None:
         """Melhoria em iterações: B1 - T1 (menos iterações é melhor)"""
+        if self.b1_avg_iterations is None or self.t1_avg_iterations is None:
+            return None
         return self.b1_avg_iterations - self.t1_avg_iterations
     
     @property
@@ -230,14 +236,14 @@ class ExperimentRunner:
         
         return avg_improvement > 0
     
-    def _test_h3(self) -> bool:
+    def _test_h3(self) -> bool | None:
         """H3: T1 usa menos tempo total (IA + validação < IA iterativo)"""
-        # Simplificação: assumir T1 convergiu mais rápido
         improvements = [
-            r.t1_avg_iterations < r.b1_avg_iterations 
+            r.t1_total_time < r.b1_total_time
             for r in self.results.values()
+            if r.b1_avg_iterations is not None and r.t1_avg_iterations is not None
         ]
-        return sum(improvements) / len(improvements) > 0.5 if improvements else False
+        return sum(improvements) / len(improvements) > 0.5 if improvements else None
     
     @staticmethod
     def _json_serialize(obj):

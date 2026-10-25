@@ -26,7 +26,7 @@ class EvaluationService:
         acceptance_criteria_met: int,
         connectivity_tests: Iterable | None = None,
         architecture_requirements: Iterable | None = None,
-        iterations_to_acceptance: int = 1,
+        iterations_to_acceptance: int | None = None,
         total_execution_time_seconds: float = 0.0,
     ) -> ScenarioEvaluationDTO:
         metrics = NetworkScenarioMetrics.from_validation_result(

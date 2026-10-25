@@ -1,34 +1,40 @@
 # Experiment Readiness Checklist
 
-**Last reviewed:** 2026-10-06  
-**Status:** Prototype in progress. Live generation and trace capture work; full validation and scenario acceptance remain incomplete.
+**Last reviewed:** 2026-10-25
+**Status:** Controlled study implemented with local regression coverage. Azure deployment and runtime behavior remain unverified in a live subscription.
+
+Use the [controlled study protocol](docs/STUDY_PROTOCOL.md) for research data.
+The older B1/T1 live path and synthetic reports are retained for compatibility,
+not as evidence of a controlled treatment effect.
 
 ## Current State
 
 | Area | Current status |
 |---|---|
-| Scenario specifications | 10 YAML specifications exist under `scenarios/specs/`. |
-| Bicep templates | 3 reference templates exist (NET-01 through NET-03); NET-04 through NET-10 remain. |
-| Prompt templates | B1, T1, and iterative prompts are Markdown files under `templates/` and loaded by `PromptConfig`. |
-| Azure model access | `gpt-6.1-sol`, `gpt-5.3-codex`, and `gpt-4o` are selectable. One NET-01 B1 request succeeded with `gpt-5.3-codex`; its output is [saved here](results/smoke/NET-01-gpt-5.3-codex.bicep). No cloud deployment was performed. |
+| Scenario specifications | All ten specifications load through the shared resolver. NET-02 YAML, NET-07 Firewall egress, NET-05 discard routing, NET-06 gateway assumptions, NET-09 DNS links, and NET-08/10 database/ingress requirements were clarified. |
+| Bicep artifacts | The three unverified B0 files were removed. Bicep is generated per run/scenario/condition/iteration; no manual baseline is currently selected. See the [reference policy](README.md#referencias-externas-de-iac). |
+| Prompt templates | B1, T1, and iterative prompts are bundled under `src/network_simulation/prompts/` and loaded through package resources by `PromptConfig`. |
+| Azure model access | `gpt-6.1-sol`, `gpt-5.3-codex`, and `gpt-4o` are selectable. Historical smoke claims are not locally reproducible evidence: the referenced artifact is absent from this checkout. No model calls or deployments were made while implementing the controlled study. |
 | Live experiment path | `python main.py --mode live` runs B1/T1 and writes unique, traceable run folders. Missing validators block before model calls. |
-| Trace configuration | `--output-dir` overrides `ExperimentConfig.output_directory`; each run records the manifest, spec/prompt copies and hashes, model ID, generated templates, and validation output. API keys are not recorded. |
-| Validation tools | Bicep CLI 0.48.1 is installed and the saved NET-01 template compiles to ARM JSON. Checkov 3.3.19's in-process fallback passed 2 ARM checks with zero failures/parser errors; its console launcher is absent. Conftest is not installed, so Rego policies have not been executed and live runs with OPA enabled remain blocked by preflight. |
-| Scenario acceptance | The runner currently records this as `not_automated`. Syntax/policy checks alone do not count as meeting the scenario contract. NET-01 also specifies a resource group while the saved model template targets an existing resource group; clarify whether the group must be created. |
+| Trace configuration | `--output-dir` overrides `ExperimentConfig.output_directory`; each run records the manifest, resolved context, original scenario sources/hashes, prompt copies, model generation settings, generated artifacts, and validation output. API keys are not recorded. |
+| Validation tools | Historical smoke results used Bicep 0.48.1 and Checkov 3.3.19. These are not proof of current installation; recheck all tool versions in the local environment. Conftest and Rego execution remain to be verified. |
+| Scenario acceptance | Study mode has finite structural contracts for all ten scenarios and guarded optional deployment/runtime checks. Legacy live mode still records `not_automated`. Candidates target an existing group; the cloud harness creates that group. A structural pass never establishes runtime correctness. |
 | Metrics | Composite `quality_score` removed from the package metrics. Both metric paths now base policy violation rate on failed checks over executed checks; a rate with no executed checks is undefined. |
-| Tests | Latest full run: 27 tests passed. Tests use mocked model/validator paths and do not prove live validator availability. |
+| Tests | Run the regression suite with the local venv. Mocked model/validator paths do not prove live Bicep or Conftest availability. |
+| Controlled design | Shared initial candidate; one-shot, blind refinement and tool feedback; repeated seeded schedules; all-trial cost/time summaries and exploratory paired family-cluster intervals. |
 
 ## Before a Live Experiment
 
 - [ ] Install and pin Conftest using the Windows instructions in [the POC guide](docs/POC_GUIDE.md), then run the Rego rules against compiled NET-01 ARM JSON.
-- [x] Install Bicep CLI and confirm `bicep build` succeeds for the saved NET-01 model response (version 0.48.1).
-- [x] Run Checkov 3.3.19 against the compiled ARM JSON and confirm no parser errors (2 checks passed, 0 failed).
+- [ ] Verify the current Bicep CLI installation with a fresh local compilation; historical version claims are not current installation checks.
+- [ ] Re-run Checkov against fresh compiled artifacts and preserve the report; earlier smoke checks are engineering verification, not hypothesis evidence.
 - [ ] Review the initial Rego rules against all applicable scenarios; expand policy tests beyond NET-01 before the main experiment.
-- [ ] Implement deterministic scenario-acceptance assertions, starting with NET-01; include explicit handling of the resource-group requirement.
+- [x] Implement finite structural contracts for all ten scenarios, with catalog-wide regression coverage and explicit resource-group scope.
 - [ ] Verify the selected Azure deployment supports the configured Responses API version and model ID.
 - [ ] Run the live command below and confirm the manifest records `completed_with_unverified_scenario_acceptance` only when automated checks pass; do not report acceptance until the scenario assertions exist.
-- [ ] Select the actual scenario scope. Only NET-01 through NET-03 currently have Bicep reference templates.
-- [ ] Define repetitions, stopping rules, model settings, and non-convergence reporting before collecting comparative data.
+- [ ] Select the scenario scope from the YAML specifications; do not require pre-existing Bicep solutions. If a manual B0 is needed, select, pin, and independently validate an external reference first.
+- [x] Implement configurable repetitions, stopping rules, model settings, and non-convergence reporting.
+- [ ] Use pilot variance/costs to choose and pre-register the main-study sample size and analysis.
 
 ## Run and Trace Output
 
@@ -65,6 +71,9 @@ When required validators are absent, the runner still records the specification,
 
 ## Before Any Cloud Deployment
 
+- [ ] Review the study plan and maximum deployment count; use `--execute --allow-azure` only after explicit budget approval.
+- [ ] Supply and validate runtime bindings, external vantage points, healthy endpoint controls, and audit parameters.
+- [ ] Verify cleanup and retained-group reporting in a disposable subscription before a study-wide run.
 - [ ] Keep generation, validation, approval, and deployment as separate steps.
 - [ ] Use least-privilege identities and require human review before write operations.
 - [ ] Test deployment preview, rollback, and emergency-change procedures in a non-production subscription.
@@ -74,7 +83,7 @@ When required validators are absent, the runner still records the specification,
 
 For Windows installation and verification commands, see the [Bicep CLI and Conftest section](docs/POC_GUIDE.md). The verified Bicep and Checkov versions are recorded in the current-state table. Conftest remains to be installed and verified before OPA-enabled runs.
 
-**Readiness decision:** The model-generation path has passed one NET-01 smoke request, and its Bicep compiled and passed the current Checkov ARM checks. OPA-enabled B1/T1 runs remain blocked until Conftest is installed and the Rego policies are executed. Scenario acceptance is still unautomated. Do not describe synthetic pilot results as live model results or use this prototype to authorize production changes.
+**Readiness decision:** Local controlled-study orchestration and cloud adapters are regression-tested; live Azure deployment/runtime checks still require operator configuration, approval, and verification. Missing validators block execution. No empirical hypothesis has been confirmed. Do not present synthetic outcomes or mocked tests as live research evidence, or use this prototype to authorize production changes.
 
 ## Project References
 

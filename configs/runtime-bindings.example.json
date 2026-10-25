@@ -1,0 +1,139 @@
+{
+  "NET-01": {
+    "sources": {
+      "web": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s"},
+      "web-peer": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {
+      "web-peer": {"source": "web-peer", "listener_ports": [8080]}
+    }
+  },
+  "NET-02": {
+    "sources": {
+      "web": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s"},
+      "app": {"vnet": "benchmark-vnet", "subnet": "app", "vm_size": "Standard_B1s"},
+      "data": {"vnet": "benchmark-vnet", "subnet": "data", "vm_size": "Standard_B1s"},
+      "web-peer": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {
+      "web": {"source": "web", "listener_ports": [8080]},
+      "app": {"source": "app", "listener_ports": [8080]},
+      "data": {"source": "data", "listener_ports": [8080]},
+      "web-peer": {"source": "web-peer", "listener_ports": [8080]}
+    }
+  },
+  "NET-03": {
+    "sources": {
+      "web": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s", "public_ip": true},
+      "app": {"vnet": "benchmark-vnet", "subnet": "app", "vm_size": "Standard_B1s"},
+      "data": {"vnet": "benchmark-vnet", "subnet": "data", "vm_size": "Standard_B1s"},
+      "external": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/operator-fixtures/providers/Microsoft.Compute/virtualMachines/external-probe"
+    },
+    "destinations": {
+      "web": {"source": "web", "listener_ports": [80, 443, 8080]},
+      "web-public": {"source": "web", "address_kind": "public"},
+      "app": {"source": "app", "listener_ports": [8080]},
+      "data": {"source": "data", "listener_ports": [5432]}
+    }
+  },
+  "NET-04": {
+    "sources": {
+      "workload": {"vnet": "benchmark-vnet", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "external": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/operator-fixtures/providers/Microsoft.Compute/virtualMachines/external-probe"
+    },
+    "destinations": {
+      "workload": {"source": "workload", "listener_ports": [8080]},
+      "ip-echo": "https://ip-echo.example.test"
+    },
+    "expected_egress_ip": {"resource_type": "nat_gateway", "name": "benchmark-nat"}
+  },
+  "NET-05": {
+    "sources": {
+      "workload": {"vnet": "benchmark-vnet", "subnet": "workload", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {"discard": "10.250.0.10"},
+    "route_destinations": {"discard": {"next_hop_type": "None", "next_hop_ip": "0.0.0.0"}}
+  },
+  "NET-06": {
+    "sources": {
+      "hub": {"vnet": "benchmark-hub", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke1": {"vnet": "benchmark-spoke1", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke2": {"vnet": "benchmark-spoke2", "subnet": "workload", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {
+      "hub": {"source": "hub", "listener_ports": [8080]},
+      "spoke1": {"source": "spoke1", "listener_ports": [8080]},
+      "spoke2": {"source": "spoke2", "listener_ports": [8080]}
+    }
+  },
+  "NET-07": {
+    "sources": {
+      "hub": {"vnet": "benchmark-hub", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke1": {"vnet": "benchmark-spoke1", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke2": {"vnet": "benchmark-spoke2", "subnet": "workload", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {
+      "hub": {"source": "hub", "listener_ports": [8080]},
+      "spoke1": {"source": "spoke1", "listener_ports": [8080]},
+      "spoke2": {"source": "spoke2", "listener_ports": [8080]},
+      "internet": "egress-target.example.test",
+      "ip-echo": "https://ip-echo.example.test"
+    },
+    "expected_egress_ip": {"resource_type": "firewall", "name": "benchmark-firewall"},
+    "route_destinations": {
+      "internet": {"next_hop_type": "VirtualAppliance", "next_hop_ip": {"firewall": "benchmark-firewall"}}
+    }
+  },
+  "NET-08": {
+    "sources": {
+      "web": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s", "private_ip_address": "10.1.1.4"},
+      "app": {"vnet": "benchmark-vnet", "subnet": "app", "vm_size": "Standard_B1s"},
+      "data": {"vnet": "benchmark-vnet", "subnet": "data", "vm_size": "Standard_B1s"},
+      "external": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/operator-fixtures/providers/Microsoft.Compute/virtualMachines/external-probe"
+    },
+    "destinations": {
+      "web": {"source": "web", "listener_ports": [80, 8080], "expected_body": "study-{study_suffix}"},
+      "app": {"source": "app", "listener_ports": [8080]},
+      "data": {"source": "data", "listener_ports": [1433]},
+      "gateway": {"public_ip": "benchmark-gateway-ip", "expected_body": "study-{study_suffix}"},
+      "internet": "egress-target.example.test"
+    }
+  },
+  "NET-09": {
+    "sources": {
+      "hub": {"vnet": "benchmark-hub", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke1": {"vnet": "benchmark-spoke1", "subnet": "workload", "vm_size": "Standard_B1s"},
+      "spoke2": {"vnet": "benchmark-spoke2", "subnet": "workload", "vm_size": "Standard_B1s"}
+    },
+    "destinations": {
+      "hub": {"source": "hub", "listener_ports": [8080]},
+      "spoke1": {"source": "spoke1", "listener_ports": [8080]},
+      "spoke2": {"source": "spoke2", "listener_ports": [8080]},
+      "bus": "benchmark-bus-{study_suffix}.servicebus.windows.net"
+    },
+    "dns_private_addresses": {"bus": {"private_endpoint": "benchmark-bus-pe"}},
+    "service_resources": {
+      "bus": {"resource_type": "Microsoft.ServiceBus/namespaces", "name": "benchmark-bus-{study_suffix}"}
+    }
+  },
+  "NET-10": {
+    "sources": {
+      "web": {"vnet": "benchmark-vnet", "subnet": "web", "vm_size": "Standard_B1s", "private_ip_address": "10.1.1.4"},
+      "app": {"vnet": "benchmark-vnet", "subnet": "app", "vm_size": "Standard_B1s"},
+      "data": {"vnet": "benchmark-vnet", "subnet": "data", "vm_size": "Standard_B1s"},
+      "external": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/operator-fixtures/providers/Microsoft.Compute/virtualMachines/external-probe"
+    },
+    "destinations": {
+      "web": {"source": "web", "listener_ports": [80, 8080], "expected_body": "study-{study_suffix}"},
+      "app": {"source": "app", "listener_ports": [8080]},
+      "data": {"source": "data", "listener_ports": [1433]},
+      "gateway": {"public_ip": "benchmark-gateway-ip", "expected_body": "study-{study_suffix}"},
+      "internet": "egress-target.example.test",
+      "sql": "benchmark-sql-{study_suffix}.database.windows.net"
+    },
+    "dns_private_addresses": {"sql": {"private_endpoint": "benchmark-sql-pe"}},
+    "service_resources": {
+      "sql": {"resource_type": "Microsoft.Sql/servers", "name": "benchmark-sql-{study_suffix}"}
+    }
+  }
+}

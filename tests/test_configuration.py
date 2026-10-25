@@ -1,4 +1,5 @@
 import pytest
+from dataclasses import asdict
 
 from network_simulation.configuration import (
     AZURE_RESPONSES_MODELS,
@@ -96,5 +97,67 @@ def test_poc_config_uses_loaded_prompts() -> None:
     config = POCConfig()
 
     assert config.prompts.system_prompt_b1
+    assert config.experiment.run_b0 is False
     assert config.validation.opa_policies_dir == "policies/azure"
     assert config.validation.opa_policies_dir == "policies/azure"
+
+
+def test_configuration_round_trip_preserves_settings_without_secrets(tmp_path):
+    config = POCConfig()
+    config.poc_name = "review experiment"
+    config.experiment.experiment_phase = "main"
+    config.experiment.main_scenarios = ["NET-10"]
+    config.experiment.t1_max_iterations = 2
+    config.experiment.run_b1 = False
+    config.experiment.output_directory = "custom-results"
+    config.validation.run_opa_policies = False
+    config.validation.custom_checks_dir = "checks"
+    config.llm.model_name = "gpt-4o"
+    config.llm.temperature = 0.1
+    config.llm.top_p = 0.7
+    config.llm.max_tokens = 1700
+    config.llm.azure_api_key = "do-not-save"
+    config.prompts.system_prompt_b1 = "Custom B1"
+    path = tmp_path / "config.yml"
+    config.save_yaml(str(path))
+    loaded = POCConfig.load_yaml(str(path))
+    assert "do-not-save" not in path.read_text(encoding="utf-8")
+    config.llm.azure_api_key = None
+    assert asdict(loaded) == asdict(config)
+
+
+def test_configuration_loads_legacy_keys(tmp_path):
+    path = tmp_path / "config.yml"
+    path.write_text(
+        "experiment:\n  phase: main\n  scenarios: [NET-10]\n  max_iterations_t1: 2\n"
+        "llm:\n  model: gpt-4o\nvalidation:\n  checkov: false\n  opa: false\n  bicep_syntax: true\n",
+        encoding="utf-8",
+    )
+    config = POCConfig.load_yaml(str(path))
+    assert config.experiment.main_scenarios == ["NET-10"]
+    assert config.experiment.t1_max_iterations == 2
+    assert config.llm.model_name == "gpt-4o"
+    assert config.validation.run_checkov is False
+    assert config.validation.run_opa_policies is False
+
+
+@pytest.mark.parametrize("text", [
+    "[]", "validation: false", "validation:\n  checkov: 'false'",
+    "experiment:\n  max_iterations_t1: 0", "llm:\n  unknown: true",
+    "unknown: {}", "prompts: []",
+])
+def test_configuration_rejects_invalid_input(tmp_path, text):
+    path = tmp_path / "config.yml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError):
+        POCConfig.load_yaml(str(path))
+
+
+def test_configuration_rejects_unsupported_model_sampling():
+    config = LLMConfig(
+        azure_endpoint="https://example.test/responses",
+        azure_api_key="test",
+        temperature=0.1,
+    )
+    with pytest.raises(ValueError, match="Sampling settings"):
+        config.create_client()

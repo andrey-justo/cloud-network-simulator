@@ -55,7 +55,12 @@ class MetricAnalyzer:
                 "acceptance_rate_delta": metrics_2.acceptance_rate - metrics_1.acceptance_rate,
                 "connectivity_correctness_delta": metrics_2.connectivity_correctness - metrics_1.connectivity_correctness,
                 "architecture_adherence_delta": metrics_2.architecture_adherence - metrics_1.architecture_adherence,
-                "iterations_delta": metrics_1.iterations_to_acceptance - metrics_2.iterations_to_acceptance,
+                "iterations_delta": (
+                    metrics_1.iterations_to_acceptance - metrics_2.iterations_to_acceptance
+                    if metrics_1.iterations_to_acceptance is not None
+                    and metrics_2.iterations_to_acceptance is not None
+                    else None
+                ),
                 "time_delta": metrics_1.total_execution_time_seconds - metrics_2.total_execution_time_seconds,
             },
             "hypothesis_tests": {
@@ -66,7 +71,12 @@ class MetricAnalyzer:
                     else None
                 ),
                 "h2_acceptance_improvement": metrics_2.acceptance_rate > metrics_1.acceptance_rate,
-                "h3_efficiency": metrics_1.total_execution_time_seconds > metrics_2.total_execution_time_seconds,
+                "h3_efficiency": (
+                    metrics_1.total_execution_time_seconds > metrics_2.total_execution_time_seconds
+                    if metrics_1.iterations_to_acceptance is not None
+                    and metrics_2.iterations_to_acceptance is not None
+                    else None
+                ),
             },
         }
 
@@ -91,7 +101,14 @@ class MetricAnalyzer:
         ]
         acceptance_deltas = [item["comparison"]["acceptance_rate_delta"] for item in comparisons]
         connectivity_deltas = [item["comparison"]["connectivity_correctness_delta"] for item in comparisons]
-        iterations_deltas = [item["comparison"]["iterations_delta"] for item in comparisons]
+        iterations_deltas = [
+            item["comparison"]["iterations_delta"] for item in comparisons
+            if item["comparison"]["iterations_delta"] is not None
+        ]
+        h3_results = [
+            item["hypothesis_tests"]["h3_efficiency"] for item in comparisons
+            if item["hypothesis_tests"]["h3_efficiency"] is not None
+        ]
         h1_results = [
             item["hypothesis_tests"]["h1_violation_difference"]
             for item in comparisons
@@ -116,7 +133,7 @@ class MetricAnalyzer:
                 "details": connectivity_deltas,
             },
             "iterations_to_acceptance": {
-                "mean_reduction": statistics.mean(iterations_deltas),
+                "mean_reduction": statistics.mean(iterations_deltas) if iterations_deltas else None,
                 "stdev": statistics.stdev(iterations_deltas) if len(iterations_deltas) > 1 else 0,
                 "details": iterations_deltas,
             },
@@ -127,9 +144,7 @@ class MetricAnalyzer:
                 "h2_supported": sum(
                     item["hypothesis_tests"]["h2_acceptance_improvement"] for item in comparisons
                 ) / len(comparisons),
-                "h3_supported": sum(
-                    item["hypothesis_tests"]["h3_efficiency"] for item in comparisons
-                ) / len(comparisons),
+                "h3_supported": sum(h3_results) / len(h3_results) if h3_results else None,
             },
         }
 

@@ -32,7 +32,7 @@ Subashini e Kavitha (2011), Fernandes et al. (2014), Hashizume et al. (2013) e T
 
 A terceira categoria de referências é a mais diretamente relacionada ao problema proposto e reflete a literatura emergente sobre geração e validação de infraestrutura como código (IaC) mediada por grandes modelos de linguagem. Essa linha aborda a questão de como modelos de linguagem podem produzir, corrigir e validar templates de infraestrutura, de modo a reduzir erros de configuração e melhorar a segurança e a implantabilidade.
 
-O artigo de IaC-Eval (Chen et al., 2024/2025, conforme identificado no material de referência) introduz um benchmark para avaliar a capacidade de LLMs de gerar IaC. Essa referência é relevante porque o projeto também busca comparar a qualidade de configurações geradas por diferentes estratégias e critérios de aceitação. O trabalho de Palavalli e Santolucito (2023), "Using a Feedback Loop for LLM-based Infrastructure as Code Generation", é diretamente conectado ao método proposto no projeto, pois explora ciclicidade de feedback para corrigir IaC gerado. O estudo de Mengistu et al. (2024), "TerraRepair", reforça a ideia de que correções precisam ser guiadas por ferramentas e contexto, e não apenas por geração livre do modelo.
+O material preliminar identifica IaC-Eval e TerraRepair como candidatos relevantes, mas seus dados bibliograficos e resultados precisam de verificacao nas fontes primarias antes de fundamentar a proposta. O trabalho verificado de Palavalli e Santolucito (2024), [Using a Feedback Loop for LLM-based Infrastructure as Code Generation](https://arxiv.org/abs/2411.19043), ja investiga geracao e reparo iterativo com diagnosticos de cfn-lint. Portanto, a existencia de um loop de feedback nao constitui novidade deste projeto.
 
 Além desses, estudos como "Does Fixing Break Security? An Empirical Study of Security Degradation in Iterative LLM-Driven Infrastructure-as-Code Repair" (Agyekum e Santos, 2025), "Compared to What? A Human-Anchored Security Benchmark for LLM-Generated Infrastructure-as-Code" (Shaw, 2025), "Deployability-Centric Infrastructure-as-Code Generation" (Zhang et al., 2026), "AIaCGateGuard" (Vargas et al., 2026) e "LLM Agentic Workflow for Automated Vulnerability Detection and Remediation in Infrastructure-as-Code" (Toprani e Madisetti, 2025) mostram que a área está madura o bastante para tratar os problemas de segurança de forma quantitativa, com benchmarks, validação por ferramentas e loops de reparo. O artigo de "Repairing Infrastructure-as-Code using Large Language Models" (Low, Cheh e Chen, 2024) e "Evaluating Language Models on Infrastructure-as-Code Development" (Tarasova et al., 2026) complementam essa visão ao demonstrar que a geração de IaC com LLMs não é apenas uma questão de sintaxe, mas também de capacidade de adaptação, qualidade de revisão e robustez em cenários reais.
 
@@ -42,15 +42,20 @@ Esses trabalhos são especialmente importantes para o projeto porque ilustram a 
 
 A revisão bibliográfica revela que, embora haja literatura bem estabelecida em segurança de nuvem, validação de infraestrutura e geração de artefatos com LLM, ainda existe fragmentação entre geração, reparo, avaliação de segurança e deployability. A literatura clássica de redes só entra aqui como apoio metodológico quando a validação exigir um ambiente controlado de conectividade ou isolamento.
 
-O gap principal identificado é a ausência de um framework reprodutível que combine, em um mesmo pipeline experimental: (i) geração automatizada de templates de infraestrutura; (ii) validação orientada a critérios de segurança e conformidade; (iii) comparação quantitativa entre geração manual e assistida por LLM; e (iv) refinamento iterativo com feedback. A contribuição deste projeto é preencher esse espaço ao propor uma metodologia experimental para avaliar a eficácia de diferentes abordagens de geração, revisão e refinamento em cenários de IaC e infraestrutura em nuvem.
+Nao se afirma ausencia geral de frameworks reprodutiveis de geracao, validacao e reparo. A contribuicao candidata e um benchmark de redes Azure/Bicep com criterios independentes, controles de orcamento e medicao separada de estrutura, politicas, deployability e conectividade. A novidade desse recorte ainda exige comparacao sistematica com fontes primarias. O [protocolo controlado](STUDY_PROTOCOL.md) define as condicoes, limites e analise exploratoria; a comparacao humana B0 e opcional, nao uma referencia presumida.
 
-Em termos mais específicos, o projeto diferencia-se por: (a) trabalhar com cenários estruturados e comparáveis; (b) validar saídas por critérios explícitos de segurança, consistência e arquitetura; (c) permitir iteração e refinamento em ciclos de feedback; e (d) produzir evidência empírica comparável a benchmarks de IaC e segurança.
+Em termos especificos, o projeto pretende medir o valor adicional dos diagnosticos contra refinamento cego partindo do mesmo candidato, usando criterios estruturais independentes e observacoes de implantacao e rede quando habilitadas. Testes de software e resultados sinteticos nao constituem evidencia empirica das hipoteses.
 
 ## 5. Direcionamento final da proposta
 
-Os trabalhos recentes relacionados ao uso de LLMs em IaC reforçam sua relevância e tornam mais preciso o recorte do problema de pesquisa. Porem o posicionamento deve ser ajustado para que a contribuição principal seja um pipeline reprodutível para geração, verificação e refinamento de IaC, com suporte de LLM e integração a ferramentas de execução e validação. A bibliografia de redes permanece apenas como suporte metodológico quando houver necessidade de testar conectividade ou isolamento.
+O recorte adotado e a avaliacao controlada do valor adicional de diagnosticos para redes Azure/Bicep, com orcamento comparavel, candidato inicial compartilhado e aceitacao independente. Um pipeline reprodutivel viabiliza o estudo, mas nao basta como alegacao de novidade. A bibliografia de redes permanece como suporte a observacoes de conectividade e isolamento; a contribuicao empirica depende de execucoes reais e de uma analise previamente definida.
 
 ## Referências
+
+Lista de descoberta: salvo quando explicitamente marcado como verificado,
+titulo, autoria, data, URL e resultados ainda precisam de verificacao em fonte
+primaria. Estes registros nao sustentam, por si so, as alegacoes de maturidade,
+ausencia de trabalhos anteriores ou confirmacao das hipoteses.
 
 - AGYEKUM, Benjamin; SANTOS, Fabio. Does Fixing Break Security? An Empirical Study of Security Degradation in Iterative LLM-Driven Infrastructure-as-Code Repair. 2025.
 - BOSSHART, Pat; DALY, Dan; GIBB, Glen; et al. P4: Programming Protocol-Independent Packet Processors. ACM SIGCOMM Computer Communication Review, v. 44, n. 3, p. 87-95, 2014.
@@ -65,7 +70,7 @@ Os trabalhos recentes relacionados ao uso de LLMs em IaC reforçam sua relevânc
 - McKEOWN, Nick; ANDERSON, Tom; BALAKRISHNAN, Hari; et al. OpenFlow: Enabling Innovation in Campus Networks. ACM SIGCOMM Computer Communication Review, v. 38, n. 2, p. 69-74, 2008.
 - MENGISTU, Minase Mekete; DI ROCCO, Juri; NGUYEN, Phuong T.; DI RUSCIO, Davide. TerraRepair: A Tool-Grounded LLM Agent for Infrastructure-as-Code Repair. 2024.
 - MIJUMBI, Rashid; HASEGAWA, Joan; MATA, Ken; et al. Network function virtualization: State-of-the-art and research challenges. IEEE Communications Surveys & Tutorials, v. 18, n. 1, p. 236-262, 2016.
-- PALAVALLI, Mayur Amarnath; SANTOLOCITO, Mark. Using a Feedback Loop for LLM-based Infrastructure as Code Generation. 2023.
+- PALAVALLI, Mayur Amarnath; SANTOLUCITO, Mark. Using a Feedback Loop for LLM-based Infrastructure as Code Generation. 2024. [Preprint verificado](https://arxiv.org/abs/2411.19043).
 - SCOTT-HAYWARD, Sandra; NAIR, Guru; SEZER, Sakir; et al. SDN security: A survey. In: Proceedings of the IEEE, v. 103, n. 1, p. 1-25, 2015.
 - SHAW, Animesh. Compared to What? A Human-Anchored Security Benchmark for LLM-Generated Infrastructure-as-Code. 2025.
 - SUBASHINI, S.; KAVITHA, V. A survey on security issues in service delivery models of cloud computing. Journal of Network and Computer Applications, v. 34, n. 1, p. 1-11, 2011.
@@ -86,7 +91,7 @@ Os trabalhos recentes relacionados ao uso de LLMs em IaC reforçam sua relevânc
 | A survey on security issues in service delivery models of cloud computing (Subashini & Kavitha, 2011) | Segurança em nuvem | Explicita riscos de isolamento e segurança em infraestrutura compartilhada | Alta |
 | Security issues in cloud environments: a survey (Fernandes et al., 2014) | Segurança em nuvem | Reforça a importância de validadores e critérios de conformidade antes da implantação | Alta |
 | IaC-Eval (Chen et al.) | LLM + IaC | Base para benchmark de geração de IaC e comparação de qualidade de artefatos | Muito alta |
-| Using a Feedback Loop for LLM-based Infrastructure as Code Generation (Palavalli & Santolucito, 2023) | LLM + IaC | Alinha-se ao ciclo de refinamento com feedback de validação | Muito alta |
+| Using a Feedback Loop for LLM-based Infrastructure as Code Generation (Palavalli & Santolucito, 2024) | LLM + IaC | Fonte primaria verificada; ja cobre reparo por feedback | Muito alta |
 | TerraRepair (Mengistu et al., 2024) | LLM + IaC | Exemplifica reparo guiado por contexto e ferramentas para IaC | Muito alta |
 | Does Fixing Break Security? (Agyekum & Santos, 2025) | LLM + IaC + segurança | Mostra a importância de monitorar regressão de segurança em iterações | Muito alta |
 | Compared to What? (Shaw, 2025) | LLM + IaC + segurança | Oferece benchmark comparativo com linha de base humana | Muito alta |

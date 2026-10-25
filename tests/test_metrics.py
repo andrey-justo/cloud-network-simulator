@@ -6,6 +6,10 @@ from network_simulation.metrics import (
     NetworkScenarioMetrics,
 )
 from evaluation.metric_analyzer import NetworkScenarioMetrics as LegacyScenarioMetrics
+from evaluation.metric_analyzer import MetricAnalyzer as LegacyMetricAnalyzer
+from experiments.experiment_runner import (
+    ConditionType, ExperimentRunner, IterationResult, ScenarioExperimentResult,
+)
 
 
 def test_network_metrics_calculate_derived_values() -> None:
@@ -126,3 +130,53 @@ def test_metric_analyzer_compare_conditions() -> None:
     assert comparison["hypothesis_tests"]["h1_violation_difference"] is True
     assert comparison["hypothesis_tests"]["h2_acceptance_improvement"] is True
     assert "quality_score_delta" not in comparison["comparison"]
+
+
+def test_efficiency_uses_elapsed_time_not_iteration_count(tmp_path):
+    result = ScenarioExperimentResult("NET-01", "test")
+    result.b1_iterations = [
+        IterationResult(number, ConditionType.B1, "", "", validation_passed=number == 2, execution_time_seconds=1)
+        for number in (1, 2)
+    ]
+    result.t1_iterations = [
+        IterationResult(1, ConditionType.T1, "", "", validation_passed=True, execution_time_seconds=100)
+    ]
+    runner = ExperimentRunner(output_dir=str(tmp_path))
+    runner.add_scenario_result(result)
+    assert result.improvement_iterations == 1
+    assert runner._test_h3() is False
+    result.t1_iterations[0].execution_time_seconds = 0.5
+    runner.add_scenario_result(result)
+    assert runner._test_h3() is True
+
+
+def test_non_convergent_runs_have_no_iterations_to_acceptance(tmp_path):
+    result = ScenarioExperimentResult("NET-01", "test")
+    result.b1_iterations = [IterationResult(1, ConditionType.B1, "", "")]
+    result.t1_iterations = [IterationResult(1, ConditionType.T1, "", "")]
+    runner = ExperimentRunner(output_dir=str(tmp_path))
+    runner.add_scenario_result(result)
+    assert result.b1_avg_iterations is None
+    assert result.t1_avg_iterations is None
+    assert result.improvement_iterations is None
+    assert runner._test_h3() is None
+    analyzer = MetricAnalyzer()
+    for condition in ("B1", "T1"):
+        analyzer.add_scenario_metrics("NET-01", condition, NetworkScenarioMetrics("NET-01", condition))
+    aggregated = analyzer.aggregate_all_scenarios()
+    assert aggregated["hypothesis_support"]["h3_supported"] is None
+    assert aggregated["iterations_to_acceptance"]["mean_reduction"] is None
+    legacy = LegacyMetricAnalyzer()
+    for condition in ("B1", "T1"):
+        legacy.add_scenario_metrics("NET-01", condition, LegacyScenarioMetrics("NET-01", condition))
+    assert legacy.aggregate_all_scenarios()["hypothesis_support"]["h3_supported"] is None
+
+
+def test_iterations_to_acceptance_is_first_successful_iteration():
+    result = ScenarioExperimentResult("NET-01", "test")
+    result.t1_iterations = [
+        IterationResult(number, ConditionType.T1, "", "", validation_passed=number >= 2)
+        for number in (1, 2, 3)
+    ]
+    result.calculate_metrics()
+    assert result.t1_avg_iterations == 2

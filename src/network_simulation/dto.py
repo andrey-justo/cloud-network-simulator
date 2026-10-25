@@ -110,5 +110,5 @@ class ScenarioEvaluationDTO:
     total_violations: int
     policy_checks_executed: int = 0
     policy_checks_failed: int = 0
-    iterations_to_acceptance: int = 0
+    iterations_to_acceptance: int | None = None
     total_execution_time_seconds: float = 0.0

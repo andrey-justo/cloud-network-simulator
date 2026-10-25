@@ -92,7 +92,9 @@ class ExecutionEngine:
         if self.mode == ExecutionMode.CLI_TOOL:
             if not command:
                 raise ValueError("A CLI command is required when mode is CLI_TOOL.")
-            return self.call_cli_tool(command=command, args=args, shell=shell)
+            return self._strategy().execute(
+                prompt, command=command, args=args, shell=shell, params=params
+            )
 
         if self.mode == ExecutionMode.MCP:
             return self.call_mcp(

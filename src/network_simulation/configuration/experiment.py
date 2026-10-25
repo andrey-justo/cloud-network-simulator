@@ -15,9 +15,13 @@ class ExperimentConfig:
             "NET-04",
             "NET-05",
             "NET-06",
+            "NET-07",
+            "NET-08",
+            "NET-09",
+            "NET-10",
         ]
     )
-    run_b0: bool = True
+    run_b0: bool = False
     run_b1: bool = True
     run_t1: bool = True
     b1_max_iterations: int = 5

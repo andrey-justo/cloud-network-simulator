@@ -1,5 +1,9 @@
 # Sessão de Trabalho: POC de IaC Azure com Validação Automatizada
 
+> Historical session snapshot: bundled B0 Bicep files and automatic baseline
+> validation were removed on 2026-10-25. See the [current guide](POC_GUIDE.md)
+> for generated artifacts and external reference selection.
+
 **Data**: 2026-09-04 a 2026-09-05  
 **Objetivo**: Validar e implementar componentes da proposta "IA Assistida para IaC na Avaliação de Configurações de Rede no Azure"  
 **Status**: ✅ Completo e Executado com Sucesso

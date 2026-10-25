@@ -1,0 +1,12 @@
+{
+  "scenarios": {
+    "NET-10": {
+      "parameters": {
+        "sqlAdministratorLogin": {"value": "studyadmin"},
+        "sqlAdministratorPassword": {"value": "REPLACE_IN_IGNORED_LOCAL_COPY"},
+        "auditStorageEndpoint": {"value": "https://REPLACE_WITH_YOUR_AUDIT_ACCOUNT.blob.core.windows.net"},
+        "auditStorageKey": {"value": "REPLACE_IN_IGNORED_LOCAL_COPY"}
+      }
+    }
+  }
+}

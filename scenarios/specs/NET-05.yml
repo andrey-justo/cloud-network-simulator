@@ -1,5 +1,5 @@
 name: Routed Network with UDR
-objective: Custom routing through User Defined Routes
+objective: Block traffic to 10.250.0.0/16 using an explicit discard User Defined Route
 required_components:
   vnet: 1 VNet with subnets
   route_table: 1 Route Table
@@ -7,10 +7,10 @@ required_components:
 acceptance_criteria:
   - Route Table created
   - UDR associated with at least 1 subnet
-  - Next hop defined correctly
+  - Route 10.250.0.0/16 uses nextHopType None
 connectivity_requirements:
-  - Specific flows are routed as defined
-  - No unauthorized alternative paths exist
+  - Traffic to 10.250.0.10 is discarded by the associated route table
+  - No more-specific route bypasses the discard route
 security_requirements:
   - Routing remains compatible with NSG rules
 architectural_requirements:

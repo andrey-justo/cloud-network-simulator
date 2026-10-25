@@ -9,7 +9,6 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-from validation.checkov_validator import CheckovValidator, validate_all_scenarios
 from experiments.experiment_runner import ExperimentRunner, ScenarioExperimentResult, IterationResult, ConditionType
 from network_simulation.metrics import MetricAnalyzer, NetworkScenarioMetrics, ConnectivityMetric
 from network_simulation.configuration import LLMConfig, POCConfig
@@ -31,59 +30,10 @@ class NetworkSimulationPOC:
         output_directory: str | None = None,
     ):
         self.workspace = Path(workspace_dir)
-        self.templates_dir = self.workspace / "templates" / "bicep"
         self.reports_dir = Path(output_directory or "reports")
         if not self.reports_dir.is_absolute():
             self.reports_dir = self.workspace / self.reports_dir
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-    
-    def stage_1_validate_baseline_templates(self) -> dict:
-        """Stage 1: Validar templates base (B0 - Baseline Manual)"""
-        logger.info("=" * 60)
-        logger.info("STAGE 1: Validar Templates Base (B0)")
-        logger.info("=" * 60)
-        
-        validator = CheckovValidator(framework="bicep")
-        reports = {}
-        
-        for bicep_file in sorted(self.templates_dir.glob("net-*.bicep")):
-            scenario_id = bicep_file.stem.upper()
-            logger.info(f"\nValidando {scenario_id}...")
-            
-            try:
-                report = validator.validate_template(
-                    str(bicep_file),
-                    scenario_id=scenario_id
-                )
-                reports[scenario_id] = report
-                
-                logger.info(
-                    f"  ✓ {scenario_id}: "
-                    f"{report.passed}/{report.total_checks} checks passed, "
-                    f"{report.violation_count} violations"
-                )
-            except Exception as e:
-                logger.error(f"  ✗ {scenario_id} failed: {e}")
-        
-        # Salvar relatório
-        summary_file = self.reports_dir / "stage1_baseline_validation.json"
-        summary = {
-            scenario_id: {
-                "total_checks": report.total_checks,
-                "passed": report.passed,
-                "failed": report.failed,
-                "acceptance_rate": report.acceptance_rate,
-                "security_violations": len(report.security_violations),
-                "policy_violations": len(report.policy_violations),
-            }
-            for scenario_id, report in reports.items()
-        }
-        
-        with open(summary_file, 'w') as f:
-            json.dump(summary, f, indent=2)
-        
-        logger.info(f"\n✓ Stage 1 completo. Relatório salvo em {summary_file}")
-        return summary
     
     def stage_2_simulate_experiment(self) -> dict:
         """Stage 2: Simular experimento B1 vs T1"""
@@ -129,7 +79,7 @@ class NetworkSimulationPOC:
                     iteration_num=i,
                     condition=ConditionType.B1,
                     template_content="dummy_bicep_content",
-                    template_path=f"templates/bicep/{scenario_id.lower()}.bicep",
+                    template_path="",
                     validation_passed=(violations == 0),
                     security_violations=max(0, violations - 1),
                     policy_violations=max(0, violations // 2),
@@ -144,7 +94,7 @@ class NetworkSimulationPOC:
                     iteration_num=i,
                     condition=ConditionType.T1,
                     template_content="optimized_bicep_content",
-                    template_path=f"templates/bicep/{scenario_id.lower()}.bicep",
+                    template_path="",
                     validation_passed=(violations == 0),
                     security_violations=max(0, violations - 1),
                     policy_violations=max(0, violations // 2),
@@ -192,7 +142,7 @@ class NetworkSimulationPOC:
                 policy_checks_failed=int(sum(b1_violations)),
                 acceptance_criteria_total=10,
                 acceptance_criteria_met=len([it for it in exp_result.b1_iterations if it.validation_passed]),
-                iterations_to_acceptance=len(exp_result.b1_iterations),
+                iterations_to_acceptance=exp_result.b1_avg_iterations,
                 total_execution_time_seconds=exp_result.b1_total_time,
             )
             metrics_b1.calculate_metrics()
@@ -211,7 +161,7 @@ class NetworkSimulationPOC:
                 policy_checks_failed=int(sum(t1_violations)),
                 acceptance_criteria_total=10,
                 acceptance_criteria_met=len([it for it in exp_result.t1_iterations if it.validation_passed]),
-                iterations_to_acceptance=len(exp_result.t1_iterations),
+                iterations_to_acceptance=exp_result.t1_avg_iterations,
                 total_execution_time_seconds=exp_result.t1_total_time,
             )
             metrics_t1.calculate_metrics()
@@ -232,11 +182,12 @@ class NetworkSimulationPOC:
         logger.info("=" * 60)
         logger.info(f"H1 (B1 > T1 violações): {aggregated['hypothesis_support']['h1_supported']*100:.0f}% de suporte")
         logger.info(f"H2 (T1 melhor aceitação): {aggregated['hypothesis_support']['h2_supported']*100:.0f}% de suporte")
-        logger.info(f"H3 (T1 mais eficiente): {aggregated['hypothesis_support']['h3_supported']*100:.0f}% de suporte")
+        h3 = aggregated["hypothesis_support"]["h3_supported"]
+        logger.info("H3 support: %s", f"{h3 * 100:.0f}%" if h3 is not None else "undefined (non-convergent runs)")
         
         logger.info(f"\nMelhoria média em violation rate: {aggregated['violation_rate']['mean_delta']:+.1f}pp")
         logger.info(f"Melhoria média em acceptance rate: {aggregated['acceptance_rate']['mean_delta']:+.1f}pp")
-        logger.info(f"Redução média de iterações: {aggregated['iterations_to_acceptance']['mean_reduction']:+.1f}")
+        logger.info("Mean iteration reduction: %s", aggregated["iterations_to_acceptance"]["mean_reduction"])
         
         # Salvar análise
         analysis_file = self.reports_dir / "stage3_analysis.json"
@@ -247,14 +198,13 @@ class NetworkSimulationPOC:
         return aggregated
     
     def run_poc(self):
-        """Executa POC completa: Stages 1, 2, 3"""
+        """Execute the synthetic experiment and analysis without a manual baseline."""
         logger.info("\n" + "=" * 60)
         logger.info("PROOF OF CONCEPT: IA-Assisted IaC for Azure Network")
         logger.info("=" * 60 + "\n")
         
         try:
-            # Stage 1: Validar templates base
-            baseline_validation = self.stage_1_validate_baseline_templates()
+            logger.info("Synthetic data only; no B0 baseline or Bicep artifacts are validated.")
             
             # Stage 2: Simular experimento
             experiment_results = self.stage_2_simulate_experiment()
@@ -267,12 +217,11 @@ class NetworkSimulationPOC:
             logger.info("RESUMO DA POC")
             logger.info("=" * 60)
             logger.info(f"\n✓ Cenários analisados: {analysis['total_scenarios']}")
-            logger.info(f"✓ Validação baseline (B0): {len(baseline_validation)} templates")
             logger.info(f"✓ Experimentos (B1 vs T1): 3 cenários de pilot")
             logger.info(f"\nResultados:")
             logger.info(f"  - Melhoria acceptance rate: {analysis['acceptance_rate']['mean_delta']:+.1f}pp")
             logger.info(f"  - Redução de violações: {abs(analysis['violation_rate']['mean_delta']):+.1f}pp")
-            logger.info(f"  - Menos iterações: {analysis['iterations_to_acceptance']['mean_reduction']:+.1f}")
+            logger.info("  - Mean iteration reduction: %s", analysis["iterations_to_acceptance"]["mean_reduction"])
             logger.info(f"\nRelatórios salvos em: {self.reports_dir}")
             
         except Exception as e:
@@ -284,7 +233,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Azure network IaC experiment runner")
     parser.add_argument(
         "--mode",
-        choices=("simulated", "live"),
+        choices=("simulated", "live", "study"),
         default="simulated",
         help="Run the historical synthetic pilot or a live model experiment.",
     )
@@ -303,12 +252,41 @@ if __name__ == "__main__":
         action="store_true",
         help="Explicitly exclude OPA from the live validation protocol.",
     )
+    parser.add_argument("--config", help="YAML configuration; required for controlled study execution.")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--allow-azure", action="store_true")
     args = parser.parse_args()
     project_root = Path(__file__).resolve().parent
+    if args.mode != "study" and (args.dry_run or args.execute or args.allow_azure):
+        parser.error("--dry-run, --execute, and --allow-azure are only valid with --mode study")
+    if args.mode == "simulated" and args.config:
+        parser.error("--config is only supported for live and study modes")
+
+    if args.mode == "study":
+        from network_simulation.main import main as study_main
+
+        forwarded = ["--workspace", str(project_root)]
+        for option, value in (("--config", args.config), ("--output-dir", args.output_dir)):
+            if value:
+                forwarded.extend((option, value))
+        for scenario in args.scenarios or []:
+            forwarded.extend(("--scenario", scenario))
+        for option, enabled in (("--dry-run", args.dry_run), ("--execute", args.execute), ("--allow-azure", args.allow_azure)):
+            if enabled:
+                forwarded.append(option)
+        if args.disable_opa:
+            parser.error("Set validation.opa in the study configuration; --disable-opa is only for legacy live mode.")
+        sys.exit(study_main(forwarded))
 
     if args.mode == "live":
-        config = POCConfig()
-        config.llm = LLMConfig.from_env()
+        config = POCConfig.load_yaml(args.config) if args.config else POCConfig()
+        credentials = LLMConfig.from_env()
+        if args.config:
+            config.llm.azure_endpoint = config.llm.azure_endpoint or credentials.azure_endpoint
+            config.llm.azure_api_key = config.llm.azure_api_key or credentials.azure_api_key
+        else:
+            config.llm = credentials
         if args.disable_opa:
             config.validation.run_opa_policies = False
         if args.output_dir:

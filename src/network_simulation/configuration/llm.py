@@ -22,9 +22,18 @@ class LLMConfig:
     azure_api_key: str | None = None
     azure_deployment: str | None = None
     local_endpoint: str = "http://localhost:8080/v1"
-    temperature: float = 0.3
+    temperature: float | None = None
     max_tokens: int = 2000
-    top_p: float = 0.95
+    top_p: float | None = None
+
+    @property
+    def generation_settings(self) -> dict[str, float | int]:
+        settings: dict[str, float | int] = {"max_output_tokens": self.max_tokens}
+        if self.temperature is not None:
+            settings["temperature"] = self.temperature
+        if self.top_p is not None:
+            settings["top_p"] = self.top_p
+        return settings
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -108,4 +117,7 @@ class LLMConfig:
             endpoint=self.azure_endpoint,
             model=self.model_name,
             api_key=self.azure_api_key,
+            max_output_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
         )

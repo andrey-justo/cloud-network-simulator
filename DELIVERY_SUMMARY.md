@@ -1,5 +1,9 @@
 # 📦 Entrega Final: POC IaC Azure com Validação Automatizada
 
+> Historical delivery snapshot: the three unverified B0 Bicep files and their
+> automatic baseline stage were removed on 2026-10-25. They are not current
+> references or experiment evidence. See the [current workflow](README.md).
+
 **Data de Conclusão**: 2026-09-05  
 **Tempo Total de Sessão**: ~5 horas  
 **Status**: ✅ Completo e Pronto para Phase 1

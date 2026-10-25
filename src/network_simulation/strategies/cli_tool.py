@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import os
+import logging
 import shlex
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from .base import ExecutionStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class CLIToolStrategy(ExecutionStrategy):
@@ -27,67 +31,65 @@ class CLIToolStrategy(ExecutionStrategy):
         if not command:
             raise ValueError("A CLI command is required when mode is CLI_TOOL.")
 
-        command_args = list(args or [])
+        command_args = [str(arg) for arg in args or []]
         normalized_shell = shell.lower()
+        candidates = {
+            "pwsh": ("pwsh", "powershell"),
+            "powershell": ("powershell", "pwsh"),
+            "bash": ("bash", "pwsh", "powershell"),
+            "sh": ("sh", "bash", "pwsh", "powershell"),
+        }.get(normalized_shell)
+        if candidates is None:
+            raise ValueError(f"Unsupported shell: {shell}")
+        options = params or {}
+        merged_env = os.environ.copy()
+        merged_env.update(options.get("env") or {})
+        selected_shell = next(
+            ((name, path) for name in candidates if (path := shutil.which(name))),
+            None,
+        )
+        resolved_command = shutil.which(command, path=merged_env.get("PATH"))
+        if resolved_command is None and Path(command).is_file():
+            resolved_command = command
+        native_command = (
+            resolved_command
+            if resolved_command and (
+                Path(resolved_command).suffix.lower() in (".exe", ".com")
+                if os.name == "nt"
+                else Path(resolved_command).suffix.lower() not in (".ps1", ".cmd", ".bat")
+            )
+            else None
+        )
+        if selected_shell is None and native_command is None:
+            raise FileNotFoundError(f"No available shell for {shell}.")
+        name, executable = selected_shell or ("", "")
+        if native_command is not None:
+            invocation = [native_command, *command_args]
+        elif name in ("pwsh", "powershell"):
+            def quote(value: str) -> str:
+                return "'" + value.replace("'", "''") + "'"
 
-        def build_powershell_commands() -> list[list[str]]:
-            commands: list[list[str]] = []
-            for executable in ("pwsh", "powershell"):
-                if not shutil.which(executable):
-                    continue
-                if command_args:
-                    command_text = " ".join([command, *[shlex.quote(str(arg)) for arg in command_args]])
-                    commands.append([executable, "-NoProfile", "-Command", command_text])
-                else:
-                    commands.append([executable, "-NoProfile", "-Command", command])
-            return commands
-
-        def build_bash_commands() -> list[list[str]]:
-            commands: list[list[str]] = []
-            if shutil.which("bash"):
-                if command_args:
-                    command_text = " ".join([shlex.quote(command), *[shlex.quote(str(arg)) for arg in command_args]])
-                    commands.append(["bash", "-lc", command_text])
-                else:
-                    commands.append(["bash", "-lc", command])
-            return commands
-
-        candidate_cmds: list[list[str]] = []
-        if normalized_shell in {"pwsh", "powershell"}:
-            candidate_cmds = build_powershell_commands()
-        elif normalized_shell in {"bash", "sh"}:
-            candidate_cmds = build_bash_commands() + build_powershell_commands()
+            command_text = (
+                "& " + " ".join(quote(value) for value in [command, *command_args])
+                if command_args or Path(command).is_file()
+                else command
+            )
+            invocation = [executable, "-NoProfile", "-NonInteractive", "-Command", command_text]
         else:
-            candidate_cmds = build_bash_commands() + build_powershell_commands()
-
-        if not candidate_cmds:
-            candidate_cmds = [[shell, *command_args]] if command_args else [[shell]]
-
-        last_error: Exception | None = None
-        completed: subprocess.CompletedProcess[str] | None = None
-        selected_cmd: list[str] = candidate_cmds[0]
-
-        for candidate in candidate_cmds:
-            try:
-                merged_env = os.environ.copy()
-                completed = subprocess.run(
-                    candidate,
-                    cwd=None,
-                    env=merged_env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                selected_cmd = candidate
-                if completed.returncode == 0:
-                    break
-                last_error = RuntimeError(f"command exited with code {completed.returncode}")
-            except FileNotFoundError as exc:  # pragma: no cover - shell fallback path
-                last_error = exc
-                continue
-
-        if completed is None:
-            completed = subprocess.CompletedProcess(selected_cmd, 1, "", str(last_error) if last_error else "")
+            command_text = shlex.join([command, *command_args]) if command_args else command
+            invocation = [executable, "-c", command_text]
+        try:
+            completed = subprocess.run(
+                invocation,
+                cwd=options.get("cwd"),
+                env=merged_env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as error:
+            logger.error("CLI execution failed: %s", error)
+            completed = subprocess.CompletedProcess(invocation, 1, "", str(error))
 
         return {
             "mode": "cli_tool",

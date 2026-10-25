@@ -1,5 +1,9 @@
 # 📚 Índice do Projeto: network-simulation
 
+> Historical index: bundled B0 Bicep files and automatic baseline validation
+> were removed on 2026-10-25. Paths and Stage 1 instructions below are obsolete.
+> See the [current guide](POC_GUIDE.md) and [setup instructions](../README.md).
+
 **Workspace**: `C:\Users\Andrey Victor Justo\workspace\network-simulation`  
 **Criação**: 2026-09-05  
 **Status**: ✅ POC Completa e Executada

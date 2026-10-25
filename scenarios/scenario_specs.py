@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from network_simulation.scenario_context import resolve_scenario_context as resolve_context
 
 SCENARIO_DIR = Path(__file__).resolve().parent / "specs"
 SCENARIO_CATALOG_PATH = Path(__file__).resolve().parent / "scenario_catalog.yml"
@@ -125,104 +126,9 @@ def _load_scenario_from_disk(scenario_id: str) -> dict[str, Any]:
     return spec
 
 
-def _resolve_extends_chain(scenario_id: str, seen: set[str] | None = None) -> list[str]:
-    """Return the dependency chain for a scenario, preserving order from parent to child."""
-    scenario_key = scenario_id.upper()
-    if seen is None:
-        seen = set()
-    if scenario_key in seen:
-        return []
-    seen.add(scenario_key)
-
-    spec = get_scenario_spec(scenario_key)
-    dependencies = spec.get("extends", []) or []
-    chain: list[str] = []
-    for dependency in dependencies:
-        dep_key = str(dependency).strip().upper()
-        if not dep_key:
-            continue
-        sub_chain = _resolve_extends_chain(dep_key, seen.copy())
-        for item in sub_chain:
-            if item not in chain:
-                chain.append(item)
-        if dep_key not in chain:
-            chain.append(dep_key)
-
-    if scenario_key not in chain:
-        chain.append(scenario_key)
-    return chain
-
-
 def resolve_scenario_context(scenario_id: str) -> dict[str, Any]:
     """Return the merged scenario context including inherited parent scenarios."""
-    scenario_key = scenario_id.upper()
-    chain = _resolve_extends_chain(scenario_key)
-    merged: dict[str, Any] = {
-        "scenario_id": scenario_key,
-        "context_chain": chain,
-        "name": "",
-        "objective": "",
-        "required_components": {},
-        "acceptance_criteria": [],
-        "connectivity_requirements": [],
-        "security_requirements": [],
-        "architectural_requirements": [],
-    }
-
-    for dependency_id in chain:
-        dependency_spec = get_scenario_spec(dependency_id)
-        if not dependency_spec:
-            continue
-        for field in ("name", "objective"):
-            value = dependency_spec.get(field)
-            if value and not merged[field]:
-                merged[field] = value
-
-        required_components = dependency_spec.get("required_components", {})
-        if isinstance(required_components, dict):
-            merged["required_components"].update(required_components)
-
-        for key in ("acceptance_criteria", "connectivity_requirements", "security_requirements", "architectural_requirements"):
-            value = dependency_spec.get(key, [])
-            if isinstance(value, list):
-                merged[key].extend(value)
-            elif value:
-                merged[key].append(value)
-
-    current_spec = get_scenario_spec(scenario_key)
-    if current_spec:
-        for field in ("name", "objective"):
-            value = current_spec.get(field)
-            if value:
-                merged[field] = value
-
-        required_components = current_spec.get("required_components", {})
-        if isinstance(required_components, dict):
-            merged["required_components"].update(required_components)
-
-        for key in ("acceptance_criteria", "connectivity_requirements", "security_requirements", "architectural_requirements"):
-            value = current_spec.get(key, [])
-            if isinstance(value, list):
-                merged[key].extend(value)
-            elif value:
-                merged[key].append(value)
-
-    # de-duplicate while preserving order
-    for key in ("acceptance_criteria", "connectivity_requirements", "security_requirements", "architectural_requirements"):
-        seen_values: set[str] = set()
-        deduped: list[Any] = []
-        for item in merged[key]:
-            marker = str(item)
-            if marker in seen_values:
-                continue
-            seen_values.add(marker)
-            deduped.append(item)
-        merged[key] = deduped
-
-    if not merged["name"] and current_spec:
-        merged["name"] = current_spec.get("name", scenario_key)
-
-    return merged
+    return resolve_context(scenario_id, get_scenario_spec)
 
 
 def get_scenario_spec(scenario_id: str) -> dict:

@@ -4,7 +4,7 @@ extends:
   - NET-08
 required_components:
   vnet: 1 VNet
-  subnets: 3 subnets
+  subnets: 3 workload subnets plus a dedicated Application Gateway subnet
   nsgs: 3 NSGs
   waf: Web Application Firewall
   private_endpoints: Private Endpoints for services
@@ -17,13 +17,13 @@ acceptance_criteria:
 connectivity_requirements:
   - Internet -> WAF: ALLOWED
   - WAF -> Frontend: ALLOWED
-  - Frontend -> Backend: ALLOWED (specific port)
-  - Backend -> Database (Private): ALLOWED
+  - "Frontend -> Backend: ALLOWED (TCP 8080)"
+  - "Backend -> Database (Private): ALLOWED (TCP 1433)"
   - Database -> Internet: BLOCKED
 security_requirements:
   - WAF enabled for protection
   - Private Endpoints for data
-  - Basic PCI-DSS compliance
-  - Auditing enabled
+  - This benchmark does not establish PCI-DSS compliance or certification
+  - SQL auditing is enabled with an explicitly configured audit destination
 architectural_requirements:
   - Banking/high-security pattern

@@ -12,9 +12,13 @@ connectivity are not yet covered.
 ## Validate a Bicep Template
 
 ```powershell
-bicep build templates/bicep/net-01-basic-vnet.bicep --outfile $env:TEMP/net-01.json
-conftest test $env:TEMP/net-01.json --policy policies/azure --output json
+$iteration = 'results\live\<run-id>\scenarios\NET-01\B1\iteration-01'
+bicep build "$iteration\template.bicep" --outfile "$env:TEMP\net-01.json"
+conftest test "$env:TEMP\net-01.json" --policy policies\azure --output json
 ```
+
+Replace `<run-id>` with an actual experiment run. There are no bundled B0
+templates; generated files are experiment evidence, not reference solutions.
 
 ## Run Rego Unit Tests
 

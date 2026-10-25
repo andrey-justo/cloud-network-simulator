@@ -1,10 +1,29 @@
-experiment_name: baseline-proposal-2
-backend: placeholder
-scenarios:
-  - scenarios/triangle_latency.yaml
-runs_per_scenario: 3
-metrics:
-  - latency_ms
-  - packet_loss_pct
-  - throughput_mbps
-notes: Replace backend with mininet, containernet, or netlab in the next iteration.
+poc:
+  name: Controlled Azure network IaC study
+experiment:
+  phase: main
+  scenarios: [NET-01, NET-02, NET-03, NET-04, NET-05, NET-06, NET-07, NET-08, NET-09, NET-10]
+  output_directory: results
+study:
+  repetitions: 1
+  max_iterations: 5
+  random_seed: 1729
+  models: []
+  bootstrap_samples: 2000
+  input_usd_per_million: null
+  output_usd_per_million: null
+llm:
+  model: gpt-5.3-codex
+  max_tokens: 8000
+validation:
+  bicep_syntax: true
+  checkov: true
+  opa: true
+cloud:
+  enabled: false
+  subscription_id: ""
+  location: ""
+  resource_group_prefix: iac-study
+  parameters_file: null
+  runtime_bindings_file: null
+  cleanup: true

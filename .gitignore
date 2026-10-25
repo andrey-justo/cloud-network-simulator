@@ -41,9 +41,13 @@ Thumbs.db
 *.pem
 *.key
 *.crt
+configs/*.local.yaml
+configs/*.local.yml
+configs/*.local.json
 
 # Generated outputs
 reports/*.json
+reports/study-*/
 results/*
 !results/.gitkeep
 logs/
