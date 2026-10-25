@@ -1,0 +1,24 @@
+name: triangle-latency
+objective: Compare latency behavior in a simple three-node topology.
+topology:
+  nodes:
+    - h1
+    - s1
+    - h2
+  links:
+    - endpoints: [h1, s1]
+      bandwidth_mbps: 100
+      delay_ms: 5
+      loss_pct: 0
+    - endpoints: [s1, h2]
+      bandwidth_mbps: 100
+      delay_ms: 10
+      loss_pct: 0
+validation:
+  expected_connectivity:
+    - src: h1
+      dst: h2
+      protocol: icmp
+metrics:
+  - latency_ms
+  - packet_loss_pct

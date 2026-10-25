@@ -1,0 +1,20 @@
+name: Secure Hub-and-Spoke with Centralized Egress
+objective: Centralized egress through the Hub with inspection
+required_components:
+  hub_vnet: 1 Hub VNet with a central subnet
+  spoke_vnets: 2-3 Spoke VNets
+  nat_gateway: NAT Gateway in the Hub
+  udr: UDRs redirecting traffic to the Hub
+acceptance_criteria:
+  - Basic Hub-and-Spoke connectivity works
+  - NAT Gateway exists in the Hub
+  - UDRs in the Spokes direct egress to the Hub
+  - Spoke workloads exit via a single Hub IP
+connectivity_requirements:
+  - Spoke egress passes through the Hub: YES
+  - Direct bypass to the Internet: NO
+security_requirements:
+  - Centralized egress inspection is possible
+  - Access to external resources is controlled
+architectural_requirements:
+  - Centralization of security and governance

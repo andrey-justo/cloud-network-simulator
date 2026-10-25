@@ -1,0 +1,1 @@
+"""Local validation adapters used by live IaC experiments."""

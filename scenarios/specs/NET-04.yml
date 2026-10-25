@@ -1,0 +1,18 @@
+name: Private Workload with NAT Gateway
+objective: Controlled egress for private workloads
+required_components:
+  vnet: 1 VNet with subnets
+  nat_gateway: 1 NAT Gateway
+  public_ip: 1 Public IP for NAT
+acceptance_criteria:
+  - NAT Gateway created
+  - Public IP allocated and associated with the NAT
+  - NAT associated with at least 1 subnet
+  - Subnet has no public IPs (private)
+connectivity_requirements:
+  - Workloads in the private subnet can access the Internet via NAT
+  - Internet cannot directly reach private workloads
+security_requirements:
+  - All egress access to the Internet goes through a single IP (NAT)
+architectural_requirements:
+  - Minimal exposure of private resources

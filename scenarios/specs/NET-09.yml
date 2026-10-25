@@ -1,0 +1,22 @@
+name: Secure Hub-and-Spoke Messaging
+objective: Secure asynchronous messaging with Private Endpoints
+required_components:
+  hub_vnet: 1 Hub VNet
+  spoke_vnets: 2 Spoke VNets
+  service_bus: Azure Service Bus
+  private_endpoints: Private Endpoint for Service Bus
+  private_dns: Private DNS Zone
+acceptance_criteria:
+  - Service Bus created
+  - Private Endpoint for Service Bus exists
+  - Private DNS Zone linked to the Hub
+  - Private DNS records for Service Bus exist
+  - Hub-Spoke peering is functional
+connectivity_requirements:
+  - Workloads in Spokes can access Service Bus via Private Endpoint
+  - Service Bus has no public endpoint enabled
+security_requirements:
+  - Service Bus is not exposed to the Internet
+  - Access is restricted to the VNet
+architectural_requirements:
+  - Secure service integration

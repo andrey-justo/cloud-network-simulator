@@ -1,0 +1,23 @@
+name: Secure Three-Tier Application
+objective: Three-layer enterprise scenario with security controls
+required_components:
+  vnet: 1 VNet
+  subnets: 3 subnets (web, app, data)
+  nsgs: 3 NSGs
+  public_endpoint: Application Gateway or Load Balancer
+acceptance_criteria:
+  - All subnets and NSGs exist as in NET-03
+  - Application Gateway or Load Balancer handles external access
+  - Data layer has no public IP
+  - Restrictive NSG rules are applied
+connectivity_requirements:
+  - Internet -> Application Gateway: ALLOWED
+  - Application Gateway -> App Layer: ALLOWED
+  - App Layer -> Data Layer: ALLOWED (TCP 5432)
+  - Data Layer -> Internet: BLOCKED
+security_requirements:
+  - Single entry point (WAF/ALB)
+  - Data isolated from the Internet
+  - Least privilege enforced
+architectural_requirements:
+  - Enterprise-grade three-tier design

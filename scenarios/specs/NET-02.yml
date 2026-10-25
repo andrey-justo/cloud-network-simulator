@@ -1,0 +1,19 @@
+name: Network Segmentation with Subnets
+objective: Three-tier segmentation: Web, App, and Data
+required_components:
+  vnet: 1 VNet
+  subnets: 3 subnets (web, app, data)
+acceptance_criteria:
+  - VNet exists
+  - 3 subnets are defined: web (10.1.1.0/24), app (10.1.2.0/24), data (10.1.3.0/24)
+  - No CIDR ranges overlap
+  - Each subnet is within the VNet CIDR (10.1.0.0/16)
+  - Network policies are disabled on all subnets
+  - Correct tier tags are applied (web, application, data)
+connectivity_requirements:
+  - All subnets can communicate (by default, local traffic is allowed)
+security_requirements:
+  - No subnet is publicly exposed
+architectural_requirements:
+  - Clear separation by responsibility
+  - Prepared for later NSG enforcement

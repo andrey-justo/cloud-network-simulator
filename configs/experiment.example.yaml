@@ -1,0 +1,10 @@
+experiment_name: baseline-proposal-2
+backend: placeholder
+scenarios:
+  - scenarios/triangle_latency.yaml
+runs_per_scenario: 3
+metrics:
+  - latency_ms
+  - packet_loss_pct
+  - throughput_mbps
+notes: Replace backend with mininet, containernet, or netlab in the next iteration.

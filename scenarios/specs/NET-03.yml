@@ -1,0 +1,29 @@
+name: Secure Network with NSGs
+objective: Restrictive security rules between network layers
+required_components:
+  vnet: 1 VNet with 3 subnets
+  nsgs: 3 Network Security Groups (web, app, data)
+acceptance_criteria:
+  - VNet and 3 subnets exist
+  - 3 NSGs are created and associated with their respective subnets
+  - NSG Web: allows inbound 80 and 443 from the Internet
+  - NSG Web: denies everything else (default deny)
+  - NSG App: allows inbound only from the Web subnet (10.1.1.0/24) on port 8080
+  - NSG App: denies everything else
+  - NSG Data: allows inbound only from the App subnet (10.1.2.0/24) on port 5432
+  - NSG Data: denies everything else
+  - No overly permissive rule exists for critical ports (0.0.0.0/0)
+connectivity_requirements:
+  - Internet -> Web (80, 443): ALLOWED
+  - Internet -> App: BLOCKED
+  - Internet -> Data: BLOCKED
+  - Web -> App (8080): ALLOWED
+  - Web -> Data: BLOCKED
+  - App -> Data (5432): ALLOWED
+  - App -> Web: depends on explicit rule (assume BLOCKED by default)
+security_requirements:
+  - Principle of least privilege applied
+  - No unnecessary exposure
+  - Controlled egress (recommended: deny all, allowlist)
+architectural_requirements:
+  - Effective layer isolation

@@ -1,0 +1,22 @@
+name: Hub-and-Spoke Basic Connectivity
+objective: Connectivity between VNets in a Hub-and-Spoke topology
+required_components:
+  hub_vnet: 1 Hub VNet
+  spoke_vnets: 2-3 Spoke VNets
+  vnet_peering: VNet peering between Hub and Spokes
+acceptance_criteria:
+  - Hub VNet exists
+  - At least 2 Spoke VNets exist
+  - Bidirectional VNet peering exists between the Hub and each Spoke
+  - Allow gateway transit is enabled on the Hub
+  - Use remote gateway is enabled on the Spokes
+  - No CIDR ranges overlap between VNets
+connectivity_requirements:
+  - Hub <-> Spoke 1: CONNECTED
+  - Hub <-> Spoke 2: CONNECTED
+  - Spoke 1 <-> Spoke 2: Requires routing via the Hub
+security_requirements:
+  - Peering does not export unnecessary private routes
+architectural_requirements:
+  - Clear Hub-and-Spoke topology
+  - Isolation between Spokes

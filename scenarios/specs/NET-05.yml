@@ -1,0 +1,17 @@
+name: Routed Network with UDR
+objective: Custom routing through User Defined Routes
+required_components:
+  vnet: 1 VNet with subnets
+  route_table: 1 Route Table
+  udr: User Defined Routes configured
+acceptance_criteria:
+  - Route Table created
+  - UDR associated with at least 1 subnet
+  - Next hop defined correctly
+connectivity_requirements:
+  - Specific flows are routed as defined
+  - No unauthorized alternative paths exist
+security_requirements:
+  - Routing remains compatible with NSG rules
+architectural_requirements:
+  - Granular control of traffic paths

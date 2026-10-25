@@ -1,0 +1,17 @@
+name: Basic Virtual Network
+objective: Creation of a basic virtual network
+required_components:
+  resource_group: 1 resource group
+  vnet: 1 VNet with a valid address space
+  subnet: at least 1 subnet
+acceptance_criteria:
+  - Resource group exists
+  - VNet has a valid address space (not empty)
+  - CIDR ranges do not overlap
+  - Subnet is defined within the VNet CIDR
+  - No reserved address ranges overlap
+  - Experiment tags are present
+connectivity_requirements: []
+security_requirements: []
+architectural_requirements:
+  - Address space is appropriate for growth (recommended /16 or larger)

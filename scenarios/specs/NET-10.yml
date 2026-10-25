@@ -1,0 +1,29 @@
+name: Secure Banking Workload
+objective: Sensitive workload with strict security requirements
+extends:
+  - NET-08
+required_components:
+  vnet: 1 VNet
+  subnets: 3 subnets
+  nsgs: 3 NSGs
+  waf: Web Application Firewall
+  private_endpoints: Private Endpoints for services
+acceptance_criteria:
+  - All subnets and NSGs are compliant with NET-08
+  - WAF enabled
+  - Private Endpoints for data services exist
+  - No public exposure of internal components
+  - Compliance with least-privilege criteria
+connectivity_requirements:
+  - Internet -> WAF: ALLOWED
+  - WAF -> Frontend: ALLOWED
+  - Frontend -> Backend: ALLOWED (specific port)
+  - Backend -> Database (Private): ALLOWED
+  - Database -> Internet: BLOCKED
+security_requirements:
+  - WAF enabled for protection
+  - Private Endpoints for data
+  - Basic PCI-DSS compliance
+  - Auditing enabled
+architectural_requirements:
+  - Banking/high-security pattern

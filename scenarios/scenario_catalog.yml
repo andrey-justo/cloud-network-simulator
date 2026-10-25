@@ -1,0 +1,30 @@
+NET-01:
+  title: Basic Virtual Network
+  file: NET-01.yml
+NET-02:
+  title: Network Segmentation with Subnets
+  file: NET-02.yml
+NET-03:
+  title: Secure Network with NSGs
+  file: NET-03.yml
+NET-04:
+  title: Private Workload with NAT Gateway
+  file: NET-04.yml
+NET-05:
+  title: Routed Network with UDR
+  file: NET-05.yml
+NET-06:
+  title: Hub-and-Spoke Basic Connectivity
+  file: NET-06.yml
+NET-07:
+  title: Secure Hub-and-Spoke with Centralized Egress
+  file: NET-07.yml
+NET-08:
+  title: Secure Three-Tier Application
+  file: NET-08.yml
+NET-09:
+  title: Secure Hub-and-Spoke Messaging
+  file: NET-09.yml
+NET-10:
+  title: Secure Banking Workload
+  file: NET-10.yml
