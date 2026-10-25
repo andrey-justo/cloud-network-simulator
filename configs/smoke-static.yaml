@@ -1,0 +1,23 @@
+poc:
+  name: Azure network IaC - two-model static smoke
+experiment:
+  phase: pilot
+  scenarios: [NET-01]
+  output_directory: results/smoke-static
+study:
+  repetitions: 1
+  max_iterations: 2
+  random_seed: 1729
+  models: [gpt-5.3-codex, gpt-6.1-sol]
+  bootstrap_samples: 2000
+llm:
+  provider: azure_responses
+  azure_auth_mode: azure_cli
+  model: gpt-5.3-codex
+  max_tokens: 8000
+validation:
+  bicep_syntax: true
+  checkov: true
+  opa: true
+cloud:
+  enabled: false

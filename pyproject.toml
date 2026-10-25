@@ -15,6 +15,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+azure-auth = [
+  "azure-identity>=1.23,<2",
+]
 dev = [
   "pytest>=8.0",
   "ruff>=0.6.0",

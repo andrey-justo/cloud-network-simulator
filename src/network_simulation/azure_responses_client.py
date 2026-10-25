@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
@@ -15,7 +17,8 @@ class AzureResponsesClient:
         *,
         endpoint: str,
         model: str,
-        api_key: str,
+        api_key: str | None = None,
+        token_provider: Callable[[], str] | None = None,
         timeout: float = 120.0,
         max_output_tokens: int = 2000,
         temperature: float | None = None,
@@ -25,8 +28,21 @@ class AzureResponsesClient:
             raise ValueError("Azure Responses endpoint is required.")
         if not model:
             raise ValueError("Azure Responses model is required.")
-        if not api_key:
-            raise ValueError("Azure Responses API key is required.")
+        if bool(api_key) == (token_provider is not None):
+            raise ValueError(
+                "Configure exactly one Azure Responses API key or Entra token provider."
+            )
+        if token_provider is not None:
+            parsed_endpoint = urlsplit(endpoint)
+            if (
+                parsed_endpoint.scheme != "https"
+                or not parsed_endpoint.hostname
+                or parsed_endpoint.username
+                or parsed_endpoint.password
+            ):
+                raise ValueError(
+                    "Entra authentication requires an HTTPS endpoint without embedded credentials."
+                )
         if type(max_output_tokens) is not int or max_output_tokens < 1:
             raise ValueError("max_output_tokens must be a positive integer.")
         if temperature is not None and not 0 <= temperature <= 2:
@@ -43,10 +59,13 @@ class AzureResponsesClient:
         self.endpoint = endpoint
         self.model = model
         self.api_key = api_key
+        self.token_provider = token_provider
         self.timeout = timeout
         self.last_usage: dict[str, int] | None = None
         self.last_response_metadata: dict[str, Any] = {}
-        self.generation_settings: dict[str, float | int] = {"max_output_tokens": max_output_tokens}
+        self.generation_settings: dict[str, float | int] = {
+            "max_output_tokens": max_output_tokens
+        }
         if temperature is not None:
             self.generation_settings["temperature"] = temperature
         if top_p is not None:
@@ -55,10 +74,28 @@ class AzureResponsesClient:
     def __call__(self, prompt: str) -> str:
         self.last_usage = None
         self.last_response_metadata = {}
+        if self.token_provider is not None:
+            try:
+                token = self.token_provider()
+            except (OSError, ValueError, RuntimeError) as error:
+                raise ValueError(
+                    "Microsoft Entra authentication failed; verify Azure CLI login, tenant, and Azure OpenAI RBAC."
+                ) from error
+            if (
+                not isinstance(token, str)
+                or not token.strip()
+                or any(character.isspace() for character in token)
+            ):
+                raise ValueError(
+                    "Microsoft Entra authentication returned an invalid token."
+                )
+            authorization = {"Authorization": f"Bearer {token}"}
+        else:
+            authorization = {"api-key": self.api_key}
         response = requests.post(
             self.endpoint,
             headers={
-                "api-key": self.api_key,
+                **authorization,
                 "Accept": "application/json",
                 "Content-Type": "application/json",
             },
@@ -79,7 +116,8 @@ class AzureResponsesClient:
         if not isinstance(payload, dict):
             raise ValueError("Azure Responses API returned a non-object JSON payload.")
         self.last_response_metadata = {
-            key: payload[key] for key in ("id", "model", "created_at", "status")
+            key: payload[key]
+            for key in ("id", "model", "created_at", "status")
             if isinstance(payload.get(key), (str, int, float))
         }
         usage = payload.get("usage")
@@ -87,7 +125,9 @@ class AzureResponsesClient:
             type(usage.get(key)) is int and usage[key] >= 0
             for key in ("input_tokens", "output_tokens")
         ):
-            self.last_usage = {key: usage[key] for key in ("input_tokens", "output_tokens")}
+            self.last_usage = {
+                key: usage[key] for key in ("input_tokens", "output_tokens")
+            }
         return self._extract_text(payload)
 
     @staticmethod

@@ -27,10 +27,34 @@ deny contains msg if {
 deny contains msg if {
     some resource in resources
     lower(object.get(resource, "type", "")) == "microsoft.network/virtualnetworks"
-    properties := object.get(resource, "properties", {})
-    subnets := object.get(properties, "subnets", [])
-    count(subnets) == 0
+    not has_declared_subnet(resource)
     msg := sprintf("VNet %q must declare at least one subnet.", [object.get(resource, "name", "<unnamed>")])
+}
+
+has_declared_subnet(resource) if {
+    properties := object.get(resource, "properties", {})
+    count(object.get(properties, "subnets", [])) > 0
+}
+
+has_declared_subnet(resource) if {
+    some child in resources
+    lower(object.get(child, "type", "")) == "microsoft.network/virtualnetworks/subnets"
+    parent_name := object.get(resource, "name", "")
+    child_name := object.get(child, "name", "")
+    startswith(child_name, sprintf("%s/", [parent_name]))
+}
+
+# ARM expression associations are verified by independent structural acceptance.
+has_declared_subnet(resource) if {
+    some child in resources
+    lower(object.get(child, "type", "")) == "microsoft.network/virtualnetworks/subnets"
+    startswith(object.get(child, "name", ""), "[")
+}
+
+has_declared_subnet(resource) if {
+    some child in resources
+    lower(object.get(child, "type", "")) == "microsoft.network/virtualnetworks/subnets"
+    startswith(object.get(resource, "name", ""), "[")
 }
 
 deny contains msg if {
@@ -52,11 +76,11 @@ deny contains msg if {
     lower(object.get(rule_properties, "direction", "")) == "inbound"
     sources := array.concat(
         [object.get(rule_properties, "sourceAddressPrefix", "")],
-        object.get(rule_properties, "sourceAddressPrefixes", [])
+        object.get(rule_properties, "sourceAddressPrefixes", []),
     )
     ports := array.concat(
         [object.get(rule_properties, "destinationPortRange", "")],
-        object.get(rule_properties, "destinationPortRanges", [])
+        object.get(rule_properties, "destinationPortRanges", []),
     )
     some source in sources
     is_public_prefix(source)
@@ -70,6 +94,6 @@ is_public_prefix(prefix) if {
     lower(prefix) in {"*", "internet", "0.0.0.0/0", "any"}
 }
 
-is_management_port(port) if { port == "22" }
-is_management_port(port) if { port == "3389" }
-is_management_port(port) if { port == "*" }
+is_management_port(port) if port == "22"
+is_management_port(port) if port == "3389"
+is_management_port(port) if port == "*"

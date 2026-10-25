@@ -20,6 +20,9 @@ class LLMConfig:
     anthropic_api_key: str | None = None
     azure_endpoint: str | None = None
     azure_api_key: str | None = None
+    azure_auth_mode: str = "api_key"
+    azure_tenant_id: str | None = None
+    azure_subscription_id: str | None = None
     azure_deployment: str | None = None
     local_endpoint: str = "http://localhost:8080/v1"
     temperature: float | None = None
@@ -95,6 +98,9 @@ class LLMConfig:
                 or os.getenv("az_api_key")
             ),
             azure_deployment=os.getenv("AZURE_DEPLOYMENT"),
+            azure_auth_mode=os.getenv("AZURE_AUTH_MODE", "api_key"),
+            azure_tenant_id=os.getenv("AZURE_TENANT_ID"),
+            azure_subscription_id=os.getenv("AZURE_SUBSCRIPTION_ID"),
         )
 
     def create_client(self):
@@ -106,17 +112,41 @@ class LLMConfig:
             raise ValueError(
                 "Set DEFAULT_MODEL_ENDPOINT or an Azure endpoint environment variable."
             )
-        if not self.azure_api_key:
+        if self.azure_auth_mode not in ("api_key", "azure_cli"):
+            raise ValueError("azure_auth_mode must be api_key or azure_cli.")
+        if self.azure_auth_mode == "api_key" and not self.azure_api_key:
             raise ValueError(
                 "Set az_api_key or an Azure API key environment variable before creating the client."
             )
 
         from network_simulation.azure_responses_client import AzureResponsesClient
+        token_provider = None
+        if self.azure_auth_mode == "azure_cli":
+            try:
+                from azure.identity import AzureCliCredential, get_bearer_token_provider
+                from azure.core.exceptions import ClientAuthenticationError
+            except ImportError as error:
+                raise ValueError("Entra authentication requires the azure-auth extra: pip install '.[azure-auth]'.") from error
+            provider = get_bearer_token_provider(
+                AzureCliCredential(
+                    tenant_id=self.azure_tenant_id or "",
+                    subscription=self.azure_subscription_id,
+                    process_timeout=30,
+                ),
+                "https://cognitiveservices.azure.com/.default",
+            )
+
+            def token_provider() -> str:
+                try:
+                    return provider()
+                except ClientAuthenticationError as error:
+                    raise ValueError("Microsoft Entra authentication failed; run az login for the configured tenant and verify Cognitive Services OpenAI User access.") from error
 
         return AzureResponsesClient(
             endpoint=self.azure_endpoint,
             model=self.model_name,
-            api_key=self.azure_api_key,
+            api_key=self.azure_api_key if self.azure_auth_mode == "api_key" else None,
+            token_provider=token_provider,
             max_output_tokens=self.max_tokens,
             temperature=self.temperature,
             top_p=self.top_p,

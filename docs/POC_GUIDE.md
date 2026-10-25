@@ -32,7 +32,10 @@ winget install -e --id Microsoft.Bicep
 bicep --version
 ```
 
-Historical runs used **Bicep CLI 0.48.1**; verify the current installation.
+Local preparation verified **Bicep CLI 0.48.1** and **Conftest 0.71.1 / OPA 1.21.1**.
+The compiler also discovers the copy installed by `az bicep install` under
+`~/.azure/bin`. Conftest is discovered through `CONFTEST_CLI`, `PATH`, or
+`~/.local/bin`. Verify versions before each data-collection batch.
 Compile a generated template to ARM JSON without deploying it (replace the
 example path with an actual run artifact):
 
@@ -45,7 +48,7 @@ current VS Code process has a stale `PATH`. To select another executable, set
 `BICEP_CLI` to its full path.
 
 The `az bicep` command installs an Azure CLI-managed copy that is not added to
-`PATH`; the experiment runner invokes `bicep` directly. See the
+`PATH`; the experiment runner discovers and invokes that binary directly. See the
 [official Bicep installation guide](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/install)
 for the Windows installer and other installation methods.
 
@@ -71,6 +74,38 @@ that data. It does not generate Bicep files or validate a manual B0 baseline.
 Its results are not live model evaluation results.
 
 ### 3. Run a live model experiment
+
+#### Microsoft Entra ID (AAD) for the prepared static pilot
+
+The prepared [smoke](../configs/smoke-static.yaml) and
+[pilot](../configs/pilot-static.yaml) select `llm.azure_auth_mode: azure_cli`.
+Install the optional SDK with:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e '.[dev,azure-auth]'
+az login --tenant <tenant-id>
+```
+
+Set the existing `DEFAULT_MODEL_ENDPOINT` to the intended Responses endpoint.
+`AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` optionally select the CLI account
+without changing its global default. The SDK requests
+`https://cognitiveservices.azure.com/.default`, caches/refreshes tokens, and
+sends `Authorization: Bearer ...`; it does not require or fall back to an API
+key. Keep token values out of configuration and logs. The identity needs
+[Cognitive Services OpenAI User](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/how-to/role-based-access-control)
+access to the target resource, and both model identifiers must exist there.
+Authentication/model availability have not been live-verified.
+
+Configuration files control the auth mode explicitly. `AZURE_AUTH_MODE=azure_cli`
+also selects Entra for legacy environment-only live runs. To intentionally use
+an API key, set `llm.azure_auth_mode: api_key` in a separate local configuration;
+there is no silent fallback.
+
+Dry runs need no credentials. Paid execution still requires `--execute`;
+neither prepared batch deploys Azure resources. See the
+[readiness checklist](../GOING_LIVE_CHECKLIST.md) for batch limits.
+
+#### API-key authentication for the legacy workflow
 
 Configure the endpoint and credential in the workspace `.env` file. Do not commit the file or print the credential:
 

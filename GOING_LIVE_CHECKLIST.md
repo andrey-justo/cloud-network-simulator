@@ -1,7 +1,7 @@
 # Experiment Readiness Checklist
 
 **Last reviewed:** 2026-10-25
-**Status:** Controlled study implemented with local regression coverage. Azure deployment and runtime behavior remain unverified in a live subscription.
+**Status:** Static pilot prepared; local Bicep, Checkov, and Conftest smoke checks pass. Entra endpoint access and both model deployments still require verification. No paid experiment has run.
 
 Use the [controlled study protocol](docs/STUDY_PROTOCOL.md) for research data.
 The older B1/T1 live path and synthetic reports are retained for compatibility,
@@ -17,17 +17,54 @@ not as evidence of a controlled treatment effect.
 | Azure model access | `gpt-6.1-sol`, `gpt-5.3-codex`, and `gpt-4o` are selectable. Historical smoke claims are not locally reproducible evidence: the referenced artifact is absent from this checkout. No model calls or deployments were made while implementing the controlled study. |
 | Live experiment path | `python main.py --mode live` runs B1/T1 and writes unique, traceable run folders. Missing validators block before model calls. |
 | Trace configuration | `--output-dir` overrides `ExperimentConfig.output_directory`; each run records the manifest, resolved context, original scenario sources/hashes, prompt copies, model generation settings, generated artifacts, and validation output. API keys are not recorded. |
-| Validation tools | Historical smoke results used Bicep 0.48.1 and Checkov 3.3.19. These are not proof of current installation; recheck all tool versions in the local environment. Conftest and Rego execution remain to be verified. |
+| Validation tools | Locally verified Bicep 0.48.1, Checkov 3.3.29, Conftest 0.71.1 / OPA 1.21.1. A fresh test-only Bicep fixture compiles, passes Checkov/Conftest and structural acceptance; negative policy controls also fail as expected. |
 | Scenario acceptance | Study mode has finite structural contracts for all ten scenarios and guarded optional deployment/runtime checks. Legacy live mode still records `not_automated`. Candidates target an existing group; the cloud harness creates that group. A structural pass never establishes runtime correctness. |
 | Metrics | Composite `quality_score` removed from the package metrics. Both metric paths now base policy violation rate on failed checks over executed checks; a rate with no executed checks is undefined. |
 | Tests | Run the regression suite with the local venv. Mocked model/validator paths do not prove live Bicep or Conftest availability. |
 | Controlled design | Shared initial candidate; one-shot, blind refinement and tool feedback; repeated seeded schedules; all-trial cost/time summaries and exploratory paired family-cluster intervals. |
+| Authentication | API keys remain supported. Prepared batches select Microsoft Entra via `AzureCliCredential`; tokens refresh through the Azure Identity SDK and are never written to experiment artifacts. No automatic API-key fallback. |
+
+## Prepared Static Batches
+
+| Configuration | Models | Scenarios | Repetitions | K | Paired units / workflows | Maximum physical model calls |
+|---|---|---|---|---|---|---|
+| [Smoke](configs/smoke-static.yaml) | `gpt-5.3-codex`, `gpt-6.1-sol` | NET-01 | 1 | 2 | 2 / 6 | 6 |
+| [Exploratory pilot](configs/pilot-static.yaml) | Same two models | All ten | 5 | 5 | 100 / 300 | 900 |
+
+Both configurations disable Azure deployment. Five repetitions are for
+exploration, not a justified confirmatory sample size. Model prices are unset;
+cost estimates remain undefined until actual rates are supplied.
+
+Preparation verification: **406 Python tests and 10 Rego tests passed**;
+correctness lint and dependency consistency checks passed. Dry-run schedules
+were generated and checked against the exact limits above. This is local
+engineering evidence, not model-performance evidence.
+
+Prepare/review without authentication or paid requests:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --mode study --config configs\smoke-static.yaml --dry-run
+.\.venv\Scripts\python.exe main.py --mode study --config configs\pilot-static.yaml --dry-run
+```
+
+Before authorizing even the six-call smoke:
+
+- [ ] Configure `DEFAULT_MODEL_ENDPOINT` for the intended Azure OpenAI Responses endpoint.
+- [ ] Log in to the correct tenant with `az login`; optionally set `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` in the ignored local environment.
+- [ ] Verify the signed-in identity has **Cognitive Services OpenAI User** access to the target resource.
+- [ ] Verify the endpoint exposes both configured model/deployment identifiers.
+- [ ] Supply nominal per-model token prices and approve a spending limit.
+- [ ] Explicitly authorize the paid smoke using `--execute`, inspect its artifacts, then separately authorize the larger pilot.
+
+Installing the optional SDK: `.\.venv\Scripts\python.exe -m pip install -e '.[dev,azure-auth]'`.
+The preparatory work installed it locally. Authenticated model access has not
+been tested, and no Azure resource/RBAC changes were made.
 
 ## Before a Live Experiment
 
-- [ ] Install and pin Conftest using the Windows instructions in [the POC guide](docs/POC_GUIDE.md), then run the Rego rules against compiled NET-01 ARM JSON.
-- [ ] Verify the current Bicep CLI installation with a fresh local compilation; historical version claims are not current installation checks.
-- [ ] Re-run Checkov against fresh compiled artifacts and preserve the report; earlier smoke checks are engineering verification, not hypothesis evidence.
+- [x] Install Conftest 0.71.1, verify its official archive SHA256, and run Rego against fresh compiled test ARM JSON.
+- [x] Verify Bicep 0.48.1 with a fresh local compilation.
+- [x] Run Checkov 3.3.29 against the fresh test artifact. This is engineering verification, not hypothesis evidence.
 - [ ] Review the initial Rego rules against all applicable scenarios; expand policy tests beyond NET-01 before the main experiment.
 - [x] Implement finite structural contracts for all ten scenarios, with catalog-wide regression coverage and explicit resource-group scope.
 - [ ] Verify the selected Azure deployment supports the configured Responses API version and model ID.
@@ -38,6 +75,8 @@ not as evidence of a controlled treatment effect.
 
 ## Run and Trace Output
 
+Use the prepared static configurations above for the controlled study.
+The following legacy commands are retained for compatibility only.
 The historical synthetic runner remains the default and must not be presented as live model evidence:
 
 ```powershell
@@ -81,9 +120,9 @@ When required validators are absent, the runner still records the specification,
 
 ## Validator Installation
 
-For Windows installation and verification commands, see the [Bicep CLI and Conftest section](docs/POC_GUIDE.md). The verified Bicep and Checkov versions are recorded in the current-state table. Conftest remains to be installed and verified before OPA-enabled runs.
+For Windows installation and verification commands, see the [Bicep CLI and Conftest section](docs/POC_GUIDE.md). The compiler also discovers the Azure CLI-managed copy under `~/.azure/bin`; Conftest supports `CONFTEST_CLI`, `PATH`, then `~/.local/bin`. No permanent PATH edit is required.
 
-**Readiness decision:** Local controlled-study orchestration and cloud adapters are regression-tested; live Azure deployment/runtime checks still require operator configuration, approval, and verification. Missing validators block execution. No empirical hypothesis has been confirmed. Do not present synthetic outcomes or mocked tests as live research evidence, or use this prototype to authorize production changes.
+**Readiness decision:** Local static validation is ready. Model identity/RBAC, endpoint/deployment availability, pricing and paid-run authorization remain open. Cloud deployment is not part of the selected pilot. No empirical hypothesis has been confirmed. Do not present test fixtures or mocked tests as live research evidence, or use this prototype to authorize production changes.
 
 ## Project References
 

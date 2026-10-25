@@ -100,6 +100,7 @@ class LiveExperimentRunner:
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "mode": "live",
             "provider": self.config.llm.provider,
+            "authentication_mode": self.config.llm.azure_auth_mode,
             "model": self.config.llm.model_name,
             "generation_settings": self.config.llm.generation_settings,
             "endpoint_host": endpoint.hostname,

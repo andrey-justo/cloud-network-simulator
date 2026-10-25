@@ -43,6 +43,32 @@ time, and cost totals include the shared first candidate. The physical call
 ledger counts that generation once. Do not sum workflow costs to estimate the
 actual experiment invoice.
 
+## Prepared exploratory static batches
+
+The [smoke configuration](../configs/smoke-static.yaml) uses NET-01, both
+`gpt-5.3-codex` and `gpt-6.1-sol`, one repetition and K=2: two paired units,
+six workflows, and at most six physical calls. The
+[pilot configuration](../configs/pilot-static.yaml) uses the same models, all
+ten scenarios, five repetitions and K=5: 100 paired units, 300 workflows, and
+at most 900 physical calls. Neither batch has been executed against a model.
+Five repetitions are exploratory, not a power analysis or confirmatory design.
+
+Both profiles enable all three static validators and disable cloud deployment.
+They explicitly select Microsoft Entra authentication via the Azure CLI;
+install the optional `azure-auth` extra and follow the
+[authentication instructions](POC_GUIDE.md#microsoft-entra-id-aad-for-the-prepared-static-pilot).
+The CLI plans without acquiring credentials or making model requests:
+
+```powershell
+.\.venv\Scripts\python.exe main.py --mode study --config configs\smoke-static.yaml --dry-run
+.\.venv\Scripts\python.exe main.py --mode study --config configs\pilot-static.yaml --dry-run
+```
+
+Endpoint access, model/deployment identifiers, pricing and a spending limit
+must be verified before explicitly authorizing `--execute`. Cost estimates are
+undefined while prices remain unset. Check the smoke artifacts before approving
+the larger pilot; static success is not live Azure acceptance.
+
 ## Scenario contracts
 
 All ten original YAML definitions must load before execution. Versioned finite

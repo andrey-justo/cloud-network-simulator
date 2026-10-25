@@ -42,6 +42,14 @@ These commands make no paid requests or deployments. Execution requires
 Cloud integration is covered by local mocked tests, not a live deployment
 verification. A static pass is not runtime acceptance or PCI-DSS compliance.
 
+Prepared [static smoke](configs/smoke-static.yaml) and
+[static pilot](configs/pilot-static.yaml) configurations select `gpt-5.3-codex`
+and `gpt-6.1-sol`, using Microsoft Entra authentication through the Azure CLI.
+The pilot has five exploratory repetitions over all ten scenarios, capped at
+900 physical model calls; it has not been executed. Install the optional
+authentication SDK with `pip install -e '.[dev,azure-auth]'` and follow the
+[readiness checklist](GOING_LIVE_CHECKLIST.md) before authorizing any paid call.
+
 ## Legacy quick start
 
 ### 1. Criar e ativar o ambiente virtual

@@ -84,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
             credentials = LLMConfig.from_env()
             config.llm.azure_endpoint = config.llm.azure_endpoint or credentials.azure_endpoint
             config.llm.azure_api_key = config.llm.azure_api_key or credentials.azure_api_key
+            config.llm.azure_tenant_id = config.llm.azure_tenant_id or credentials.azure_tenant_id
+            config.llm.azure_subscription_id = config.llm.azure_subscription_id or credentials.azure_subscription_id
         runner = ControlledStudyRunner(workspace_dir=base_dir, config=config)
         if not args.execute:
             plan = runner.plan(scenarios)

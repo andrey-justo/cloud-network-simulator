@@ -18,17 +18,23 @@ class BicepCompiler:
             os.getenv("BICEP_CLI")
             or shutil.which("bicep")
             or self._find_winget_install()
+            or self._find_azure_cli_install()
         )
+
+    @staticmethod
+    def _find_azure_cli_install() -> str | None:
+        candidate = (
+            Path.home()
+            / ".azure"
+            / "bin"
+            / ("bicep.exe" if os.name == "nt" else "bicep")
+        )
+        return str(candidate) if candidate.is_file() else None
 
     @staticmethod
     def _find_winget_install() -> str | None:
         winget_package_root = (
-            Path.home()
-            / "AppData"
-            / "Local"
-            / "Microsoft"
-            / "WinGet"
-            / "Packages"
+            Path.home() / "AppData" / "Local" / "Microsoft" / "WinGet" / "Packages"
         )
         candidates = sorted(
             winget_package_root.glob("Microsoft.Bicep_*/bicep.exe"),

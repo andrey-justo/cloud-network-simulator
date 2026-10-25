@@ -22,6 +22,8 @@ def test_live_runner_traces_blocked_preflight_in_configured_directory(
         config=config,
         output_directory=output_directory,
         llm_client=lambda prompt: model_calls.append(prompt) or "unexpected",
+        bicep_compiler=SimpleNamespace(executable=None),
+        conftest_validator=SimpleNamespace(executable=None),
     ).run(["NET-01"])
 
     run_directory = Path(result["output_directory"])

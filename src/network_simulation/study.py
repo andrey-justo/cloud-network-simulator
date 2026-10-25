@@ -240,6 +240,7 @@ class ControlledStudyRunner:
             "mode": "controlled_study",
             "models": models,
             "provider": self.config.llm.provider,
+            "authentication_mode": self.config.llm.azure_auth_mode,
             "endpoint_host": endpoint.hostname,
             "endpoint_path": endpoint.path,
             "endpoint_api_version": parse_qs(endpoint.query).get("api-version", [None])[

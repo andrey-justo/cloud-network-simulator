@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import os
 from pathlib import Path
 
 
@@ -9,9 +10,23 @@ class ConftestValidator:
     """Evaluate compiled ARM JSON against the configured Rego policies."""
 
     def __init__(self, executable: str | None = None) -> None:
-        self.executable = executable or shutil.which("conftest")
+        local = (
+            Path.home()
+            / ".local"
+            / "bin"
+            / ("conftest.exe" if os.name == "nt" else "conftest")
+        )
+        self.executable = (
+            (executable or None)
+            if executable is not None
+            else os.getenv("CONFTEST_CLI")
+            or shutil.which("conftest")
+            or (str(local) if local.is_file() else None)
+        )
 
-    def validate(self, compiled_template: Path, policy_directory: Path) -> dict[str, object]:
+    def validate(
+        self, compiled_template: Path, policy_directory: Path
+    ) -> dict[str, object]:
         policy_files = sorted(policy_directory.glob("*.rego"))
         if not policy_files:
             return {
