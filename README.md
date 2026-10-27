@@ -1,27 +1,27 @@
 # Network Simulation
 
-Repositorio-base para uma proposta de pesquisa em Infra + LLM e Infrastructure as Code (IaC), com foco em geracao, validacao e refinamento de configuracoes em cenarios parametrizados.
+Base repository for a research proposal on infrastructure, LLMs, and Infrastructure as Code (IaC), focused on generating, validating, and refining configurations in parameterized scenarios.
 
-## Objetivo inicial
+## Initial objective
 
-Este repositorio comeca pela camada de orquestracao experimental:
+This repository starts with the experimental orchestration layer:
 
-- definicao versionada de cenarios;
-- manifestos de execucao;
-- coleta padronizada de resultados;
-- suporte a comparacao entre geracao manual, assistida por LLM e validacao automatizada.
+- versioned scenario definitions;
+- execution manifests;
+- standardized result collection;
+- support for comparing manual generation, LLM-assisted generation, and automated validation.
 
-A decisao e proposital: a emulacao de rede nao e o foco principal da proposta, mas pode ser usada como apoio metodologico em etapas especificas. Primeiro estruturamos o pipeline de geracao e validacao; depois conectamos, quando necessario, um backend de execucao ou de experimentacao.
+This is deliberate: network emulation is not the proposal's main focus, but it can provide methodological support at specific stages. We first structure the generation and validation pipeline, then connect an execution or experimentation backend when necessary.
 
-## Estrutura
+## Structure
 
-- `configs/`: configuracoes do experimento.
-- `scenarios/`: cenarios de rede em YAML.
-- `results/`: saida das execucoes.
-- `src/network_simulation/prompts/`: prompts de geracao incluidos no pacote.
-- `scripts/`: automacoes de setup e execucao.
-- `src/network_simulation/`: pacote Python de orquestracao.
-- `tests/`: testes iniciais.
+- `configs/`: experiment configurations.
+- `scenarios/`: network scenarios in YAML.
+- `results/`: execution outputs.
+- `src/network_simulation/prompts/`: generation prompts bundled with the package.
+- `scripts/`: setup and execution automation.
+- `src/network_simulation/`: Python orchestration package.
+- `tests/`: initial tests.
 
 ## Controlled research study
 
@@ -276,108 +276,108 @@ node --test .github\extensions\study-monitor\monitor.test.mjs .github\extensions
 
 ## Legacy quick start
 
-### 1. Criar e ativar o ambiente virtual
+### 1. Create and activate the virtual environment
 
-Use sempre o ambiente local `.venv` para manter a configuração reproduzível e consistente com o restante do projeto.
+Always use the local `.venv` environment to keep the setup reproducible and consistent with the rest of the project.
 
 ```powershell
 .\scripts\bootstrap.ps1
 .\.venv\Scripts\Activate.ps1
 ```
 
-> Se o ambiente já existir, basta ativá-lo com ` .\.venv\Scripts\Activate.ps1 `.
+> If the environment already exists, activate it with ` .\.venv\Scripts\Activate.ps1 `.
 
-O script instala as dependencias e o pacote editavel em `.venv`, sem depender
-da ativacao. Instale Python 3.11 antes de executa-lo:
+The script installs dependencies and the editable package in `.venv` without
+requiring activation. Install Python 3.11 before running it:
 
 ```powershell
 winget install -e --id Python.Python.3.11 --scope user --silent
 ```
 
-Para outra instalacao, use `.\scripts\bootstrap.ps1 -PythonExecutable 'C:\caminho\python.exe'`.
-Para testar sem ativar: `.\.venv\Scripts\python.exe -m pytest -q`.
+For another installation, use `.\scripts\bootstrap.ps1 -PythonExecutable 'C:\path\python.exe'`.
+To test without activation: `.\.venv\Scripts\python.exe -m pytest -q`.
 
-### 2. Listar cenarios disponiveis
+### 2. List available scenarios
 
 ```powershell
 python -m network_simulation.main --list-scenarios
 ```
 
-### 3. Gerar um manifesto de execucao
+### 3. Generate an execution manifest
 
 ```powershell
 python -m network_simulation.main --config configs/experiment.example.yaml --dry-run
 ```
 
-### 4. Gerar e validar artefatos de experimento
+### 4. Generate and validate experiment artifacts
 
-Configure o modelo e os validadores conforme o [guia da POC](docs/POC_GUIDE.md), depois execute:
+Configure the model and validators according to the [POC guide](docs/POC_GUIDE.md), then run:
 
 ```powershell
 python main.py --mode live --scenario NET-01 --output-dir results/live
 ```
 
-Cada iteracao preserva `response.txt`, `template.bicep`, ARM compilado e relatorios
-sob `results/live/<run-id>/scenarios/<scenario>/<B1-ou-T1>/iteration-<numero>/`.
-Trate os arquivos gerados como evidencias: nao os corrija manualmente; uma
-correcao deve ser uma nova iteracao rastreavel. A validacao ocorre depois da
-geracao, e seus resultados ficam disponiveis para extracao posterior de metricas.
-O pipeline ainda nao automatiza a aceitacao completa dos cenarios.
+Each iteration preserves `response.txt`, `template.bicep`, compiled ARM, and reports
+under `results/live/<run-id>/scenarios/<scenario>/<B1-or-T1>/iteration-<number>/`.
+Treat generated files as evidence: do not fix them manually; a correction must
+be a new, traceable iteration. Validation takes place after generation, and its
+results remain available for subsequent metric extraction.
+The pipeline does not yet automate full scenario acceptance.
 
-As especificacoes com `extends` sao resolvidas antes da geracao. Cada cenario
-preserva as fontes originais em `sources/`, seus hashes e o contexto resolvido
-em `specification.yml`; todas as tentativas recebem esse contexto completo.
-Um Checkov com erro de execucao, JSON invalido, erros de parsing ou nenhum
-check executado nunca conta como validacao aprovada.
+Specifications with `extends` are resolved before generation. Each scenario
+preserves the original sources in `sources/`, their hashes, and the resolved
+context in `specification.yml`; all attempts receive this complete context.
+A Checkov execution error, invalid JSON, parsing errors, or zero executed checks
+never counts as a validation pass.
 
-`python main.py --mode simulated` usa apenas dados sinteticos; nao gera Bicep
-nem valida um baseline manual B0. Os antigos arquivos em `templates/bicep`
-foram removidos por nao constituirem referencias verificadas.
+`python main.py --mode simulated` uses only synthetic data; it neither generates
+Bicep nor validates a manual B0 baseline. The former files in `templates/bicep`
+were removed because they were not verified references.
 
-## Configuracao e instalacao
+## Configuration and installation
 
-`POCConfig.save_yaml()` e `POCConfig.load_yaml()` preservam as configuracoes
-experimentais, do modelo, dos validadores e dos prompts. O carregamento aceita
-as chaves antigas (`phase`, `scenarios`, `model`, `checkov`, `opa`) e rejeita
-tipos ou configuracoes desconhecidas. As chaves de API nao sao salvas; obtenha
-credenciais do ambiente antes de criar um cliente.
+`POCConfig.save_yaml()` and `POCConfig.load_yaml()` preserve experiment, model,
+validator, and prompt settings. Loading accepts the legacy keys
+(`phase`, `scenarios`, `model`, `checkov`, `opa`) and rejects unknown types or
+settings. API keys are not saved; obtain credentials from the environment
+before creating a client.
 
-`max_tokens` e enviado como `max_output_tokens` (padrao: 2000).
-`temperature` e `top_p` ficam desativados por padrao (`null`); este cliente
-somente aceita esses controles de amostragem para `gpt-4o`. Configura-los para
-os modelos de raciocinio gera um erro explicito. Respostas incompletas sao
-registradas como falhas de geracao, nao como templates completos.
+`max_tokens` is sent as `max_output_tokens` (default: 2000).
+`temperature` and `top_p` are disabled by default (`null`); this client accepts
+these sampling controls only for `gpt-4o`. Configuring them for reasoning models
+produces an explicit error. Incomplete responses are recorded as generation
+failures, not complete templates.
 
-Prompts e o adaptador Checkov fazem parte do wheel. O caminho instalado e
-`network_simulation.validation.checkov_validator`; o antigo modulo
-`validation.checkov_validator` continua disponivel no checkout como wrapper.
-Checkov e uma ferramenta opcional: instale as dependencias de `requirements.txt`
-quando quiser executar esses checks. Uma configuracao com Checkov desabilitado
-nao exige sua instalacao.
+Prompts and the Checkov adapter are included in the wheel. The installed path is
+`network_simulation.validation.checkov_validator`; the legacy
+`validation.checkov_validator` module remains available in the checkout as a wrapper.
+Checkov is optional: install the dependencies in `requirements.txt` when you want
+to run these checks. A configuration with Checkov disabled does not require
+its installation.
 
-A estrategia CLI respeita `cwd` e `env`. Binarios nativos recebem argumentos
-diretamente; comandos internos usam o quoting do shell selecionado. Um comando
-com retorno nao zero nao e repetido em outro shell.
+The CLI strategy respects `cwd` and `env`. Native binaries receive arguments
+directly; built-in commands use the selected shell's quoting rules. A command
+that returns a nonzero exit code is not retried in another shell.
 
-Os relatorios calculam H3 pelo tempo observado, nao pela quantidade de
-iteracoes. Tentativas sem convergencia usam `null` para iteracoes ate aceitacao
-e ficam fora da comparacao de eficiencia; se nao houver pares convergentes,
-H3 e a reducao de iteracoes ficam indefinidos.
+Reports calculate H3 from observed time, not iteration counts. Non-convergent
+attempts use `null` for iterations to acceptance and are excluded from the
+efficiency comparison; without convergent pairs, H3 and the iteration reduction
+remain undefined.
 
-## Referencias externas de IaC
+## External IaC references
 
 - [Azure Verified Modules](https://github.com/Azure/bicep-registry-modules):
-  referencia principal para modulos Bicep, incluindo recursos de rede.
+  primary reference for Bicep modules, including network resources.
 - [Azure Quickstart Templates](https://github.com/Azure/azure-quickstart-templates):
-  exemplos de topologias e implantacoes; precisam de avaliacao por cenario.
+  topology and deployment examples; they require scenario-specific assessment.
 
-Esses repositorios sao referencias de projeto, nao resultados do experimento
-nem baselines aceitos automaticamente. Antes de adotar um exemplo como B0,
-registre URL, commit ou versao, licenca, parametros e cenario; compile e valide
-o artefato com o mesmo protocolo dos resultados gerados. Mantenha eventuais
-referencias locais separadas dos prompts e das saidas, por exemplo em
-`references/`, somente quando uma selecao for revisada. Nenhum exemplo externo
-foi importado, e as referencias nao sao injetadas nos prompts B1/T1.
+These repositories are design references, not experiment results or automatically
+accepted baselines. Before adopting an example as B0, record its URL, commit or
+version, license, parameters, and scenario; compile and validate the artifact
+using the same protocol as generated results. Keep any local references separate
+from prompts and outputs, for example in `references/`, only after a selection
+has been reviewed. No external example was imported, and references are not
+injected into B1/T1 prompts.
 
 ## Next research milestone
 
@@ -387,11 +387,11 @@ subscription. After explicit budget approval, use a pilot to determine the
 main-study replication and analysis plan. No empirical hypothesis is confirmed
 by the synthetic reports or software regression tests.
 
-## Observacao sobre Windows
+## Windows note
 
-Para emulacao real com Mininet/Containernet, o caminho mais seguro e usar:
+For actual emulation with Mininet/Containernet, the safest approach is to use:
 
-- WSL2 com Ubuntu; ou
-- container Linux dedicado.
+- WSL2 with Ubuntu; or
+- a dedicated Linux container.
 
-Mesmo sem essa camada, este repositorio ja permite organizar cenarios, validacoes e metricas sem travar a pesquisa no ambiente local.
+Even without this layer, the repository already supports organizing scenarios, validations, and metrics without blocking research in the local environment.

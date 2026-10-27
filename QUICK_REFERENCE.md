@@ -5,30 +5,30 @@
 > Use the [current setup and artifact workflow](README.md) instead.
 
 **Workspace**: `C:\Users\Andrey Victor Justo\workspace\network-simulation`  
-**Print-friendly**: ✅ Salve como PDF para consulta rápida
+**Print-friendly**: ✅ Save as PDF for quick reference
 
 ---
 
-## 🚀 Comandos Rápidos
+## 🚀 Quick Commands
 
-### Executar a POC
+### Run the POC
 ```bash
 cd "c:\Users\Andrey Victor Justo\workspace\network-simulation"
 python main.py
 ```
 
-### Ver Resultados
+### View Results
 ```bash
 Get-ChildItem reports/*.json
 cat reports/stage3_analysis.json
 ```
 
-### Ver Cenários
+### View Scenarios
 ```bash
 python -c "from scenarios.scenario_specs import list_all_scenarios; print(list_all_scenarios())"
 ```
 
-### Validar um Template
+### Validate a Template
 ```bash
 python -c "
 from validation.checkov_validator import CheckovValidator
@@ -40,33 +40,33 @@ print(f'Acceptance: {r.acceptance_rate}%')
 
 ---
 
-## 📁 Arquivos Importantes
+## 📁 Important Files
 
-### Documentação
-| Arquivo | Propósito |
+### Documentation
+| File | Purpose |
 |---------|-----------|
-| [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | 1 página (gestores) |
-| [docs/POC_GUIDE.md](docs/POC_GUIDE.md) | Como usar |
-| [docs/POC_RESULTS.md](docs/POC_RESULTS.md) | Resultados pilot |
+| [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | One page (managers) |
+| [docs/POC_GUIDE.md](docs/POC_GUIDE.md) | Usage guide |
+| [docs/POC_RESULTS.md](docs/POC_RESULTS.md) | Pilot results |
 | [docs/NEXT_STEPS.md](docs/NEXT_STEPS.md) | Roadmap Phase 1-5 |
-| [docs/INTEGRATION_MAP.md](docs/INTEGRATION_MAP.md) | Integração projeto principal |
+| [docs/INTEGRATION_MAP.md](docs/INTEGRATION_MAP.md) | Main project integration |
 
-### Código Principal
-| Arquivo | Linhas | Descrição |
+### Main Code
+| File | Lines | Description |
 |---------|--------|-----------|
-| [main.py](../main.py) | 250 | Orquestrador 3 stages |
-| [configuration package](../src/network_simulation/configuration/__init__.py) | Modular | Configurações |
+| [main.py](../main.py) | 250 | Three-stage orchestrator |
+| [configuration package](../src/network_simulation/configuration/__init__.py) | Modular | Settings |
 
-### Módulos
-| Arquivo | Linhas | Classes |
+### Modules
+| File | Lines | Classes |
 |---------|--------|---------|
-| [scenarios/scenario_specs.py](../../scenarios/scenario_specs.py) | 450 | 10 cenários |
+| [scenarios/scenario_specs.py](../../scenarios/scenario_specs.py) | 450 | 10 scenarios |
 | [validation/checkov_validator.py](../../validation/checkov_validator.py) | 300 | CheckovValidator |
 | [experiments/experiment_runner.py](../../experiments/experiment_runner.py) | 450 | ExperimentRunner |
 | [evaluation/metric_analyzer.py](../../evaluation/metric_analyzer.py) | 350 | MetricAnalyzer |
 
 ### Templates
-| Arquivo | Cenário | Status |
+| File | Scenario | Status |
 |---------|---------|--------|
 | [net-01-basic-vnet.bicep](../../templates/bicep/net-01-basic-vnet.bicep) | NET-01 | ✅ |
 | [net-02-segmentation.bicep](../../templates/bicep/net-02-segmentation.bicep) | NET-02 | ✅ |
@@ -74,9 +74,9 @@ print(f'Acceptance: {r.acceptance_rate}%')
 
 ---
 
-## 📊 Dados Estrutura
+## 📊 Data Structure
 
-### Cenário (scenario_specs.py)
+### Scenario (scenario_specs.py)
 ```python
 {
   "scenario_id": "NET-01",
@@ -89,7 +89,7 @@ print(f'Acceptance: {r.acceptance_rate}%')
 }
 ```
 
-### Experimento (experiment_runner.py)
+### Experiment (experiment_runner.py)
 ```python
 IterationResult:
   - iteration_num: int
@@ -110,7 +110,7 @@ ScenarioExperimentResult:
   - improvement_violations: float
 ```
 
-### Métricas (metric_analyzer.py)
+### Metrics (metric_analyzer.py)
 ```python
 NetworkScenarioMetrics:
   - violation_rate: float (%)
@@ -118,7 +118,7 @@ NetworkScenarioMetrics:
   - connectivity_correctness: float (%)
   - iterations_to_acceptance: int
 
-Comparação B1 vs T1:
+B1 vs T1 Comparison:
   - violation_rate_delta: float
   - acceptance_rate_delta: float
   - iterations_delta: int
@@ -126,37 +126,37 @@ Comparação B1 vs T1:
 
 ---
 
-## 🧪 3 Stages da POC
+## 🧪 The 3 POC Stages
 
-### Stage 1: Validação Baseline
+### Stage 1: Baseline Validation
 ```
-Entrada: Templates Bicep (B0)
-Processo: Checkov scan
-Saída: stage1_baseline_validation.json
-└── acceptance_rate, violations por template
-```
-
-### Stage 2: Experimento
-```
-Entrada: Configuração (num scenarios, max iterations)
-Processo: Simula B1 vs T1 por cenário
-Saída: experiment_*.json
-└── b1_iterations[], t1_iterations[], métricas
+Input: Bicep templates (B0)
+Process: Checkov scan
+Output: stage1_baseline_validation.json
+└── acceptance_rate, violations per template
 ```
 
-### Stage 3: Análise
+### Stage 2: Experiment
 ```
-Entrada: Dados do Stage 2
-Processo: Compara B1 vs T1, testa H1/H2/H3
-Saída: stage3_analysis.json
-└── hypothesis_support, deltas, agregação
+Input: Configuration (num scenarios, max iterations)
+Process: Simulates B1 vs T1 per scenario
+Output: experiment_*.json
+└── b1_iterations[], t1_iterations[], metrics
+```
+
+### Stage 3: Analysis
+```
+Input: Stage 2 data
+Process: Compares B1 vs T1, tests H1/H2/H3
+Output: stage3_analysis.json
+└── hypothesis_support, deltas, aggregation
 ```
 
 ---
 
-## 🔢 Estatísticas Esperadas
+## 🔢 Expected Statistics
 
-### Depois de `python main.py` (Pilot)
+### After `python main.py` (Pilot)
 ```
 Total Scenarios: 3
 Total Runs: 6 (3 scenarios × 2 conditions)
@@ -164,94 +164,94 @@ Total Runs: 6 (3 scenarios × 2 conditions)
 NET-01:
   B1 Iterations: 3 | T1 Iterations: 1
   B1 Violations: 1.7 | T1 Violations: 0.0
-  Improvement: 50pp violação reduction
+  Improvement: 50pp violation reduction
 
 NET-02:
   B1 Iterations: 4 | T1 Iterations: 2
   B1 Violations: 2.5 | T1 Violations: 1.0
-  Improvement: 80pp violação reduction
+  Improvement: 80pp violation reduction
 
 NET-03:
   B1 Iterations: 5 | T1 Iterations: 1
   B1 Violations: 3.2 | T1 Violations: 2.0
-  Improvement: 140pp violação reduction
+  Improvement: 140pp violation reduction
 
-HIPÓTESES:
-  H1 (B1 > T1 violations): 100% suportado ✅
-  H2 (T1 melhor aceitação): Requer dados reais ⚠️
-  H3 (T1 mais eficiente): 2.7x menos iterações ✅
+HYPOTHESES:
+  H1 (B1 > T1 violations): 100% supported ✅
+  H2 (T1 higher acceptance): Requires real data ⚠️
+  H3 (T1 more efficient): 2.7x fewer iterations ✅
 ```
 
 ---
 
-## 🎯 Próximos Passos Curtos
+## 🎯 Immediate Next Steps
 
-### Esta Semana
-- [ ] Decidir qual LLM (OpenAI, Anthropic, Azure)
-- [ ] Preparar API keys
+### This Week
+- [ ] Choose an LLM (OpenAI, Anthropic, Azure)
+- [ ] Prepare API keys
 
-### Próxima Semana (Phase 1)
-- [ ] Instalar Checkov
-- [ ] Implementar templates NET-04 a NET-10
+### Next Week (Phase 1)
+- [ ] Install Checkov
+- [ ] Implement NET-04 through NET-10 templates
 - [ ] OPA/Rego policies
-- [ ] Refinar prompts
+- [ ] Refine prompts
 
-### Semana 3-5 (Phase 2)
+### Weeks 3-5 (Phase 2)
 - [ ] LLM integration
 - [ ] llm_generator.py
-- [ ] Experimento com dados reais
+- [ ] Experiment with real data
 
-### Semana 6-12 (Phase 3-5)
+### Weeks 6-12 (Phases 3-5)
 - [ ] Pilot experiment
-- [ ] Main experiment (10 cenários)
-- [ ] Integração com projeto principal
+- [ ] Main experiment (10 scenarios)
+- [ ] Main project integration
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Erro: "Checkov not found"
+### Error: "Checkov not found"
 ```
-Solução: pip install checkov==3.2.0
-```
-
-### Erro: "Template not found"
-```
-Solução: Templates devem estar em templates/bicep/*.bicep
+Solution: pip install checkov==3.2.0
 ```
 
-### POC não gera relatórios
+### Error: "Template not found"
 ```
-Solução: Verificar que reports/ diretório existe
-         Verificar permissões de escrita
+Solution: Templates must be in templates/bicep/*.bicep
 ```
 
-### Métricas zeradas
+### POC does not generate reports
 ```
-Solução: Stage 2 simulação = mock data
-         Use dados reais: Phase 2 LLM integration
+Solution: Check that the reports/ directory exists
+          Check write permissions
+```
+
+### Zero-valued metrics
+```
+Solution: Stage 2 simulation = mock data
+          Use real data: Phase 2 LLM integration
 ```
 
 ---
 
-## 🔗 Links de Referência
+## 🔗 Reference Links
 
-### Workspace Atual
+### Current Workspace
 - `C:\Users\Andrey Victor Justo\workspace\network-simulation`
 
-### Projeto Principal
+### Main Project
 - `C:\Users\Andrey Victor Justo\workspace\coding-tool-reasoning`
 
-### Documentação
-- [Índice Completo](INDEX.md)
-- [Roadmap Detalhado](NEXT_STEPS.md)
-- [Integração](INTEGRATION_MAP.md)
+### Documentation
+- [Complete Index](INDEX.md)
+- [Detailed Roadmap](NEXT_STEPS.md)
+- [Integration](INTEGRATION_MAP.md)
 
 ---
 
-## 💡 Dicas Rápidas
+## 💡 Quick Tips
 
-### Para Entender um Cenário
+### To Understand a Scenario
 ```bash
 python -c "
 from scenarios.scenario_specs import get_scenario_spec
@@ -262,7 +262,7 @@ for i, c in enumerate(spec.acceptance_criteria, 1):
 "
 ```
 
-### Para Ver Violações de um Template
+### To View Template Violations
 ```bash
 python -c "
 from validation.checkov_validator import CheckovValidator
@@ -273,7 +273,7 @@ print('Policy Violations:', r.policy_violations)
 "
 ```
 
-### Para Modificar Configuração
+### To Modify Configuration
 ```python
 # src/network_simulation/configuration/
 ExperimentConfig:
@@ -284,65 +284,65 @@ ExperimentConfig:
 LLMConfig:
   - provider: "openai" | "anthropic" | "azure"
   - model_name: "gpt-4"
-  - temperature: 0.3  # Para determinismo
+  - temperature: 0.3  # For determinism
 ```
 
 ---
 
-## 📱 Comandos Úteis
+## 📱 Useful Commands
 
 ```bash
-# Listar templates
+# List templates
 Get-ChildItem templates/bicep/*.bicep
 
-# Contar linhas de código
+# Count lines of code
 Get-Content main.py, src/network_simulation/configuration/*.py | Measure-Object -Line
 
-# Ver tamanho dos relatórios
+# View report sizes
 Get-ChildItem reports/*.json | Format-Table Name, @{Name="Size(KB)"; Expression={[math]::Round($_.Length/1KB, 2)}}
 
-# Extrair estatísticas do JSON
+# Extract statistics from JSON
 Get-Content reports/stage3_analysis.json | ConvertFrom-Json | Select-Object -ExpandProperty hypothesis_support
 
-# Buscar um cenário na documentação
+# Find a scenario in the documentation
 Get-ChildItem docs/ | Select-String -Pattern "NET-05"
 ```
 
 ---
 
-## 🏆 Checklist de Verificação
+## 🏆 Verification Checklist
 
-### Após Clonar/Preparar
-- [ ] Python 3.10+ instalado
+### After Cloning/Setup
+- [ ] Python 3.10+ installed
 - [ ] `cd network-simulation`
-- [ ] `requirements.txt` disponível
-- [ ] `main.py` presente
+- [ ] `requirements.txt` available
+- [ ] `main.py` present
 
-### Antes de Executar
-- [ ] Checkov instalado (próxima iteração)
-- [ ] LLM config preparada (próxima iteração)
-- [ ] `reports/` diretório pronto
-- [ ] Permissões de escrita OK
+### Before Running
+- [ ] Checkov installed (next iteration)
+- [ ] LLM configuration prepared (next iteration)
+- [ ] `reports/` directory ready
+- [ ] Write permissions OK
 
-### Depois de `python main.py`
-- [ ] stage1_baseline_validation.json gerado
-- [ ] experiment_*.json gerado
-- [ ] stage3_analysis.json gerado
-- [ ] Nenhum erro fatal nos logs
+### After `python main.py`
+- [ ] stage1_baseline_validation.json generated
+- [ ] experiment_*.json generated
+- [ ] stage3_analysis.json generated
+- [ ] No fatal errors in the logs
 
 ---
 
-## 📞 Contatos
+## 📞 Contacts
 
-| Papel | Responsável |
+| Role | Owner |
 |-------|------------|
-| Arquitetura POC | Andrey Victor Justo |
-| Pesquisa | Andrey Victor Justo |
+| POC Architecture | Andrey Victor Justo |
+| Research | Andrey Victor Justo |
 | LLM Integration | TBD |
 | DevOps/Infra | TBD |
 
 ---
 
-**Última Atualização**: 2026-09-05  
-**Versão**: 0.1.0  
-**Impresso**: [Data]
+**Last Updated**: 2026-09-05  
+**Version**: 0.1.0  
+**Printed**: [Date]
