@@ -1,0 +1,10 @@
+name: HTTPS-only workload egress
+objective: Restrict new outbound application connections to HTTPS.
+family: egress
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Outbound TCP connections on port 443 are permitted.
+  - Other new outbound connections are blocked.
+  - Return traffic for permitted connections remains functional.
+security_requirements:
+  - Apply egress restrictions to the intended private workload.

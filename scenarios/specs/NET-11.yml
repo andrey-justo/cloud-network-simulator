@@ -1,0 +1,12 @@
+name: Isolated private network
+objective: Provide private addressing for a workload without direct Internet exposure.
+family: addressing
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Workloads have private IPv4 addresses in a nonoverlapping address space.
+  - Subnet addresses are contained within the network address space.
+connectivity_requirements:
+  - Workloads in the same subnet can communicate privately.
+  - Unsolicited Internet access to workloads is blocked.
+security_requirements:
+  - Do not assign public addresses to workloads.

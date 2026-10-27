@@ -1,0 +1,10 @@
+name: Restricted administrative access
+objective: Permit SSH administration only from an explicitly authorized private management range.
+family: filtering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Authorized management clients can reach TCP port 22.
+  - SSH from every other source is blocked.
+security_requirements:
+  - The authorized management range must not be the entire Internet.
+  - Workload interfaces remain private.

@@ -1,0 +1,10 @@
+name: HTTPS-only inbound application access
+objective: Limit inbound access to a private application workload to HTTPS.
+family: filtering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Inbound TCP traffic to the application is allowed on port 443.
+  - Other unsolicited inbound application traffic is blocked.
+security_requirements:
+  - Apply filtering to the intended workload.
+  - Do not assign a public address to the workload.

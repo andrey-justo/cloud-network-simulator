@@ -100,7 +100,7 @@ class LiveExperimentRunner:
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "mode": "live",
             "provider": self.config.llm.provider,
-            "authentication_mode": self.config.llm.azure_auth_mode,
+            "authentication_mode": self.config.llm.authentication_mode,
             "model": self.config.llm.model_name,
             "generation_settings": self.config.llm.generation_settings,
             "endpoint_host": endpoint.hostname,
@@ -427,7 +427,7 @@ class LiveExperimentRunner:
         _write_json(condition_directory / "result.json", condition_result)
         return condition_result
 
-    def validate_candidate(self, template_path: Path, scenario_id: str) -> dict[str, Any]:
+    def validate_candidate(self, template_path: Path, scenario_id: str, *, checkov_checks: list[str] | None = None, checkov_required_checks: list[str] | None = None) -> dict[str, Any]:
         validation: dict[str, Any] = {}
         compiled_path = template_path.parent / "template.json"
         if self.config.validation.validate_bicep_syntax:
@@ -438,27 +438,7 @@ class LiveExperimentRunner:
         if self.config.validation.run_checkov:
             if validation["bicep"]["status"] == "passed":
                 try:
-                    checkov = self.checkov_validator
-                    if checkov is None:
-                        checkov = CheckovValidator(framework="arm")
-                    report = checkov.validate_template(str(compiled_path), scenario_id=scenario_id)
-                    report_data = asdict(report) if is_dataclass(report) else dict(report)
-                    counts = {
-                        name: report_data.get(name)
-                        for name in ("passed", "failed", "skipped", "total_checks")
-                    }
-                    counts["parsing_errors"] = report_data.get("parsing_errors", 0)
-                    if any(type(value) is not int or value < 0 for value in counts.values()):
-                        raise ValueError("Checkov report has missing or invalid check counts.")
-                    if counts["total_checks"] != counts["passed"] + counts["failed"] + counts["skipped"]:
-                        raise ValueError("Checkov report has inconsistent check counts.")
-                    if counts["failed"] or counts["parsing_errors"]:
-                        checkov_status = "failed"
-                    elif counts["passed"] == 0:
-                        checkov_status = "no_checks_executed"
-                    else:
-                        checkov_status = "passed"
-                    validation["checkov"] = {**report_data, "status": checkov_status}
+                    validation["checkov"] = self.validate_checkov(compiled_path,scenario_id,"arm",checks=checkov_checks,required_checks=checkov_required_checks)
                 except Exception as error:
                     validation["checkov"] = {
                         "status": "unavailable_or_failed", "error": str(error),
@@ -482,3 +462,26 @@ class LiveExperimentRunner:
         else:
             validation["conftest"] = {"status": "disabled"}
         return validation
+
+    def validate_checkov(self, template_path: Path, scenario_id: str, framework: str, *, checks: list[str] | None = None, required_checks: list[str] | None = None) -> dict[str,Any]:
+        checkov = self.checkov_validator or CheckovValidator(framework=framework,**({"checks":checks} if checks is not None else {}))
+        report = checkov.validate_template(str(template_path),scenario_id=scenario_id)
+        data = asdict(report) if is_dataclass(report) else dict(report)
+        counts = {name:data.get(name) for name in ("passed","failed","skipped","total_checks")}
+        counts["parsing_errors"] = data.get("parsing_errors",0)
+        if any(type(value) is not int or value < 0 for value in counts.values()):
+            raise ValueError("Checkov report has missing or invalid check counts.")
+        if counts["total_checks"] != counts["passed"]+counts["failed"]+counts["skipped"]:
+            raise ValueError("Checkov report has inconsistent check counts.")
+        status = "failed" if counts["failed"] or counts["parsing_errors"] else "no_checks_executed" if not counts["passed"] else "passed"
+        baseline_error = None
+        if checks is not None:
+            results = data.get("results")
+            if not isinstance(results,list):
+                raise ValueError("Scoped Checkov result details are missing.")
+            executed = {item["check_id"] for item in results if item.get("result") in ("passed","failed")}
+            missing = set(required_checks or []) - executed
+            if counts["skipped"] or missing:
+                baseline_error = f"Scoped baseline checks must execute without suppression. Skipped: {counts['skipped']}; missing required IDs: {', '.join(sorted(missing)) or 'none'}."
+                status = "failed"
+        return {**data,"status":status,"selected_check_ids":checks,"required_check_ids":required_checks,"baseline_error":baseline_error}

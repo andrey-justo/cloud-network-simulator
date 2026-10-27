@@ -255,11 +255,17 @@ if __name__ == "__main__":
     parser.add_argument("--config", help="YAML configuration; required for controlled study execution.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--ui", action="store_true", help="Open the integrated static-study workspace.")
+    parser.add_argument("--resume", help="Managed static execution directory to resume.")
+    parser.add_argument("--full-rerun", action="store_true")
+    parser.add_argument("--login", action="store_true", help="Permit Copilot browser sign-in if cached credentials are unavailable.")
     parser.add_argument("--allow-azure", action="store_true")
     args = parser.parse_args()
+    if args.ui and args.mode == "simulated":
+        args.mode = "study"
     project_root = Path(__file__).resolve().parent
-    if args.mode != "study" and (args.dry_run or args.execute or args.allow_azure):
-        parser.error("--dry-run, --execute, and --allow-azure are only valid with --mode study")
+    if args.mode != "study" and (args.dry_run or args.execute or args.allow_azure or args.login or args.ui or args.resume or args.full_rerun):
+        parser.error("Execution, UI, and resume flags are only valid with --mode study")
     if args.mode == "simulated" and args.config:
         parser.error("--config is only supported for live and study modes")
 
@@ -267,12 +273,12 @@ if __name__ == "__main__":
         from network_simulation.main import main as study_main
 
         forwarded = ["--workspace", str(project_root)]
-        for option, value in (("--config", args.config), ("--output-dir", args.output_dir)):
+        for option, value in (("--config", args.config), ("--output-dir", args.output_dir), ("--resume", args.resume)):
             if value:
                 forwarded.extend((option, value))
         for scenario in args.scenarios or []:
             forwarded.extend(("--scenario", scenario))
-        for option, enabled in (("--dry-run", args.dry_run), ("--execute", args.execute), ("--allow-azure", args.allow_azure)):
+        for option, enabled in (("--dry-run", args.dry_run), ("--execute", args.execute), ("--login", args.login), ("--allow-azure", args.allow_azure), ("--ui", args.ui), ("--full-rerun", args.full_rerun)):
             if enabled:
                 forwarded.append(option)
         if args.disable_opa:
@@ -281,8 +287,12 @@ if __name__ == "__main__":
 
     if args.mode == "live":
         config = POCConfig.load_yaml(args.config) if args.config else POCConfig()
-        credentials = LLMConfig.from_env()
-        if args.config:
+        credentials = (
+            LLMConfig.from_env()
+            if not args.config or config.llm.provider == "azure_responses"
+            else config.llm
+        )
+        if args.config and config.llm.provider == "azure_responses":
             config.llm.azure_endpoint = config.llm.azure_endpoint or credentials.azure_endpoint
             config.llm.azure_api_key = config.llm.azure_api_key or credentials.azure_api_key
             config.llm.azure_tenant_id = config.llm.azure_tenant_id or credentials.azure_tenant_id

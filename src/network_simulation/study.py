@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import random
+import re
 import subprocess
 import time
 from collections import defaultdict
@@ -25,18 +27,22 @@ from network_simulation.live_experiment import (
     _sha256,
     _write_json,
 )
-from network_simulation.scenario_context import resolve_scenario_context
+from network_simulation.scenario_context import resolve_scenario_context, render_requirements
+from network_simulation.usage_accounting import call_usage, workflow_usage
 from network_simulation.study_acceptance import evaluate_structure, scenario_contract
 from network_simulation.study_cloud import AzureStudyBackend
+from network_simulation.study_state import execution_lock, read_checkpoint, save_checkpoint
+from network_simulation.scenario_targets import TARGETS, scenario_variants
+from network_simulation.validation.terraform_validator import TerraformValidator
+from network_simulation.validation.checkov_validator import is_checkov_available
 
 ARMS = ("one_shot", "blind_refinement", "tool_feedback")
 COMMON_PROMPT = """Generate a complete resource-group-scoped Azure Bicep template.
-Implement the supplied scenario and benchmark contract, including least privilege.
+Implement the supplied high-level scenario, including its security and connectivity requirements.
 Return only Bicep, without fences or explanatory prose. Do not omit required
-resources to reduce policy findings. Use literal benchmark role names and CIDRs,
-and declare studySuffix with default 'local' for globally unique service names.
+resources to reduce policy findings. Choose a suitable architecture, resource names,
+addressing and resource relationships from the stated requirements.
 Do not create runtime probe VMs: those belong to the independent test harness.
-The contract's properties are requirements, not validator diagnostics.
 """
 
 
@@ -54,6 +60,17 @@ def summarize_trials(
     trials: list[dict[str, Any]], *, seed: int, samples: int
 ) -> dict[str, Any]:
     """Descriptive estimates and family-clustered paired bootstrap intervals."""
+    if any("target" in record for record in trials):
+        return {
+            "inference": "Descriptive target-stratified results; never pool clouds or IaC tools as independent repetitions.",
+            "targets": {
+                target: summarize_trials(
+                    [{key:value for key,value in record.items() if key != "target"} for record in trials if record.get("target","azure-bicep")==target],
+                    seed=seed,samples=samples,
+                )
+                for target in sorted({record.get("target","azure-bicep") for record in trials})
+            },
+        }
     by_model: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for trial in trials:
         by_model[trial["model"]].append(trial)
@@ -67,15 +84,20 @@ def summarize_trials(
         for arm in ARMS:
             values = [record["conditions"][arm] for record in records]
             costs = [item["cost_usd"] for item in values]
+            assessed = [item for item in values if item["accepted"] is not None]
+            structural = [item for item in values if item["structural_accepted"] is not None]
             arms[arm] = {
                 "trials": len(values),
-                "accepted": sum(item["accepted"] for item in values),
-                "acceptance_rate": sum(item["accepted"] for item in values)
-                / len(values),
+                "accepted": sum(item["accepted"] for item in assessed) if assessed else None,
+                "acceptance_assessed": len(assessed),
+                "acceptance_unassessed": len(values) - len(assessed),
+                "acceptance_rate": sum(item["accepted"] for item in assessed) / len(assessed) if assessed else None,
                 "structural_acceptance_rate": sum(
-                    item["structural_accepted"] for item in values
+                    item["structural_accepted"] for item in structural
                 )
-                / len(values),
+                / len(structural) if structural else None,
+                "visible_validation_pass_rate": sum(item["visible_checks_passed"] for item in values) / len(values),
+                "usage": workflow_usage(values),
                 "nonconverged": sum(
                     not item["visible_checks_passed"] for item in values
                 ),
@@ -90,13 +112,20 @@ def summarize_trials(
                 "unknown_cost_trials": sum(cost is None for cost in costs),
                 "mean_elapsed_seconds_accepted_only": (
                     sum(item["elapsed_seconds"] for item in values if item["accepted"])
-                    / sum(item["accepted"] for item in values)
+                    / sum(item["accepted"] is True for item in values)
                     if any(item["accepted"] for item in values)
                     else None
                 ),
             }
         comparisons = {}
         for control in ("one_shot", "blind_refinement"):
+            if any(record["conditions"][arm]["accepted"] is None for record in records for arm in ("tool_feedback", control)):
+                comparisons[f"tool_feedback_minus_{control}"] = {
+                    "status": "not_assessed", "paired_risk_difference": None,
+                    "family_cluster_bootstrap_95_interval": None,
+                    "reason": "Requirement satisfaction awaits independent human review.",
+                }
+                continue
             differences: dict[str, list[int]] = defaultdict(list)
             for record in records:
                 differences[record["family"]].append(
@@ -144,6 +173,7 @@ class ControlledStudyRunner:
         checkov_validator: Any = None,
         conftest_validator: Any = None,
         cloud_backend: Any = None,
+        terraform_validator: Any = None,
     ) -> None:
         self.workspace = Path(workspace_dir).resolve()
         self.config = config
@@ -159,9 +189,12 @@ class ControlledStudyRunner:
         self.call_ledger: list[dict[str, Any]] = []
         self.parameters: dict[str, Any] = {}
         self.scenario_parameters: dict[str, dict[str, Any]] = {}
+        self.terraform = terraform_validator or TerraformValidator(self.workspace)
 
     def plan(self, scenario_ids: list[str]) -> dict[str, Any]:
         self.config.study.validate()
+        if self.config.study.assessment_mode == "human_review" and self.config.cloud.enabled:
+            raise ValueError("Human-review studies are static-only; cloud deployment is not permitted.")
         self.parameters = {}
         self.scenario_parameters = {}
         if self.config.cloud.parameters_file:
@@ -193,12 +226,19 @@ class ControlledStudyRunner:
         keys = [key.upper() for key in scenario_ids]
         if len(set(keys)) != len(keys):
             raise ValueError("Scenario IDs must not be duplicated.")
+        if any(re.fullmatch(r"NET-\d{2}", key) is None for key in keys):
+            raise ValueError("Scenario IDs must identify NET-XX YAML specifications.")
         models = self.config.study.models or [self.config.llm.model_name]
-        if any(model not in self.config.llm.available_models for model in models):
+        if self.config.llm.provider not in ("azure_responses", "copilot"):
+            raise ValueError(f"Unsupported LLM provider: {self.config.llm.provider}")
+        if self.config.llm.provider == "azure_responses" and any(
+            model not in self.config.llm.available_models for model in models
+        ):
             raise ValueError(
                 "All study models must be supported by the configured provider."
             )
         scenarios = {}
+        skipped_variants = []
         for key in keys:
             sources: dict[str, str] = {}
 
@@ -208,7 +248,19 @@ class ControlledStudyRunner:
                 return yaml.safe_load(sources[parent])
 
             resolved = resolve_scenario_context(key, load)
-            contract = scenario_contract(key)
+            if "supported_targets" in resolved:
+                if self.config.cloud.enabled:
+                    raise ValueError("High-level target scenarios support static-only validation.")
+                variants, skipped = scenario_variants(key, resolved, sources, self.config.study.targets)
+                scenarios.update(variants)
+                skipped_variants.extend(skipped)
+                continue
+            if "azure-bicep" not in self.config.study.targets:
+                raise ValueError("Legacy NET-01 through NET-10 specifications require azure-bicep.")
+            contract = {
+                "version": "human-review-v1", "parameters": {"studySuffix": {}},
+                "runtime_checks": [], "scope": "Human requirement assessment is pending.",
+            } if self.config.study.assessment_mode == "human_review" else scenario_contract(key)
             supplied = self.scenario_parameters.get(key, self.parameters)
             unknown = supplied.keys() - contract["parameters"].keys()
             if unknown:
@@ -224,12 +276,25 @@ class ControlledStudyRunner:
                     yaml.safe_dump(resolved, sort_keys=True)
                 ),
             }
+            skipped_variants.extend(
+                {"intent":key,"target":target,"reason":"NET-01 through NET-10 retain their Azure/Bicep scope; NET-11 through NET-30 declare supported targets in YAML."}
+                for target in self.config.study.targets if target != "azure-bicep"
+            )
+        if not scenarios:
+            raise ValueError("No supported scenario/target variants were selected.")
+        terraform_targets = {scenario["target"] for scenario in scenarios.values() if scenario.get("target","azure-bicep") != "azure-bicep"}
+        if terraform_targets and (not self.config.validation.validate_terraform_syntax or self.config.validation.run_opa_policies):
+            raise ValueError("Terraform requires validate_terraform_syntax: true and opa: false. Existing ARM Rego policies cannot validate Terraform.")
+        for scenario in scenarios.values():
+            if "target" in scenario:
+                scenario["specification_sha256"] = _sha256(yaml.safe_dump(scenario["specification"],sort_keys=True))
         rng = random.Random(self.config.study.random_seed)
         endpoint = urlsplit(self.config.llm.azure_endpoint or "")
         jobs = [
-            {"scenario_id": key, "model": model, "repetition": repetition}
+            {"scenario_id": key, "model": model, "repetition": repetition,
+             **({"target":scenarios[key]["target"],"intent":scenarios[key]["intent"]} if "target" in scenarios[key] else {})}
             for model in models
-            for key in keys
+            for key in scenarios
             for repetition in range(1, self.config.study.repetitions + 1)
         ]
         rng.shuffle(jobs)
@@ -238,9 +303,21 @@ class ControlledStudyRunner:
         return {
             "schema_version": 1,
             "mode": "controlled_study",
+            "prompt_protocol": "human-readable-requirements-v2",
+            "execution_blockers": [
+                "Independent requirements-based acceptance is not implemented for the new high-level specs. "
+                "Paid study execution is blocked; the removed exact-resource oracle must not score these scenarios."
+            ] if any("target" in scenario for scenario in scenarios.values()) and self.config.study.assessment_mode != "human_review" else [],
             "models": models,
+            "requested_scenarios":keys,
+            "skipped_variants":skipped_variants,
+            "target_prompts": {target:self._target_prompt(target) for target in sorted({scenario.get("target","azure-bicep") for scenario in scenarios.values()})},
+            "target_implementation_sha256": {
+                filename.name:_sha256((Path(__file__).parent / filename).read_text(encoding="utf-8"))
+                for filename in (Path("scenario_targets.py"),Path("scenario_context.py"),Path("usage_accounting.py"),Path("live_experiment.py"),Path("validation") / "terraform_source.py",Path("validation") / "terraform_validator.py",Path("validation") / "checkov_validator.py",Path("validation") / "environment.py")
+            },
             "provider": self.config.llm.provider,
-            "authentication_mode": self.config.llm.azure_auth_mode,
+            "authentication_mode": self.config.llm.authentication_mode,
             "endpoint_host": endpoint.hostname,
             "endpoint_path": endpoint.path,
             "endpoint_api_version": parse_qs(endpoint.query).get("api-version", [None])[
@@ -257,20 +334,31 @@ class ControlledStudyRunner:
                 .with_name("study_acceptance.py")
                 .read_text(encoding="utf-8")
             ),
+            "runner_implementation_sha256": _sha256(Path(__file__).read_text(encoding="utf-8")),
             "scenarios": scenarios,
             "schedule": jobs,
             "maximum_physical_model_calls": len(jobs)
+            * (1 + 2 * (self.config.study.max_iterations - 1))
+            if self.config.llm.provider != "copilot" else None,
+            "maximum_generation_requests": len(jobs)
             * (1 + 2 * (self.config.study.max_iterations - 1)),
+            "model_call_accounting": "Copilot SDK invocations; backend retries may add inference calls."
+            if self.config.llm.provider == "copilot" else "Direct Responses API requests.",
             "maximum_cloud_deployments": len(jobs) * len(ARMS)
             if self.config.cloud.enabled
             else 0,
-            "primary_outcome": "final full acceptance within budget"
+            "primary_outcome": "Compilation and visible policy outcomes; requirement satisfaction is unassessed pending human review."
+            if self.config.study.assessment_mode == "human_review"
+            else "High-level requirement acceptance is not implemented; execution blocked."
+            if any("target" in scenario for scenario in scenarios.values())
+            else "final full acceptance within budget"
             if self.config.cloud.enabled
             else "final finite structural acceptance within budget (runtime unverified)",
             "stopping_rule": "Stop each arm on visible-validator pass, generation failure, or K attempts; never stop on held-out acceptance.",
             "exclusions": "No post-generation trial exclusions. Operational failures remain in the denominator.",
             "shared_initial_cost": "Each workflow includes the common candidate cost; physical ledger counts it once.",
-            "cost_basis": "Nominal model-token cost estimates from user rates, not invoices. Azure resource costs and caching discounts are not inferred.",
+            "cost_basis": "Copilot allowance/credits; token prices are not Copilot invoices."
+            if self.config.llm.provider == "copilot" else "Nominal model-token cost estimates from user rates, not invoices. Azure resource costs and caching discounts are not inferred.",
             "parameter_overrides": {
                 "studySuffix": "local for structural evaluation; unique per cloud deployment"
             },
@@ -342,25 +430,141 @@ class ControlledStudyRunner:
                     errors.append(f"{key}/{check['id']}: missing next-hop evidence.")
         return errors
 
-    def run(self, scenario_ids: list[str]) -> dict[str, Any]:
-        started = time.perf_counter()
+    def run(
+        self, scenario_ids: list[str], *, allow_browser_auth: bool = False,
+        resume_from: Path | None = None,
+        on_started: Callable[[Path], None] | None = None,
+        rerun_of: str | None = None,
+    ) -> dict[str, Any]:
         plan = self.plan(scenario_ids)
+        if plan["execution_blockers"]:
+            raise ValueError(" ".join(plan["execution_blockers"]))
         root = Path(self.config.experiment.output_directory)
         if not root.is_absolute():
             root = self.workspace / root
-        directory = root / f"study-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid4().hex[:8]}"
-        directory.mkdir(parents=True, exist_ok=False)
-        manifest = {
-            **plan,
-            "output_directory": str(directory),
-            "status": "started",
-            "created_at_utc": datetime.now(UTC).isoformat(),
-            "trials": [],
-            "tool_versions": self.validator._tool_versions(),
-        }
-        _write_json(directory / "manifest.json", manifest)
-        errors = self.validator._preflight_errors()
-        if not self.config.validation.validate_bicep_syntax:
+        directory = resume_from.resolve() if resume_from else (
+            root / f"study-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{uuid4().hex[:8]}"
+        ).resolve()
+        if resume_from:
+            if self.config.cloud.enabled:
+                raise ValueError("Resume is supported only for static studies.")
+            read_checkpoint(directory)
+        else:
+            directory.mkdir(parents=True, exist_ok=False)
+        with execution_lock(directory):
+            try:
+                return self._run_locked(
+                    scenario_ids, plan, directory, allow_browser_auth=allow_browser_auth,
+                    resume=resume_from is not None, on_started=on_started, rerun_of=rerun_of,
+                )
+            finally:
+                self.terraform.close()
+
+    def _run_locked(
+        self, scenario_ids: list[str], plan: dict[str, Any], directory: Path, *,
+        allow_browser_auth: bool, resume: bool,
+        on_started: Callable[[Path], None] | None, rerun_of: str | None,
+    ) -> dict[str, Any]:
+        started = time.perf_counter()
+        if resume:
+            checkpoint = read_checkpoint(directory)
+            manifest = checkpoint["manifest"]
+            if Path(manifest["output_directory"]).resolve() != directory:
+                raise ValueError("Resume requires the original execution location; use a full rerun for moved results.")
+            for field, value in plan.items():
+                if field not in {"paid_execution", "maximum_generation_requests", "maximum_physical_model_calls"} and manifest.get(field) != value:
+                    raise ValueError(f"Resume rejected: frozen study field changed: {field}. Use a full rerun.")
+            if manifest["status"] in ("completed", "completed_with_operational_failures"):
+                return manifest
+            self.call_ledger = checkpoint["calls"]
+            history = manifest.setdefault("resume_history", [])
+            abandoned = []
+            unknown = 0
+            recorded_archives = {
+                archive for item in history for archive in item["archived_partial_trials"]
+            }
+            for index, job in enumerate(plan["schedule"], 1):
+                if index <= len(manifest["trials"]):
+                    continue
+                partial = directory / f"trial-{index:05d}"
+                archives_root = directory / "interrupted-attempts"
+                if partial.exists():
+                    if not partial.resolve().is_relative_to(directory):
+                        raise ValueError("Partial trial resolves outside its execution directory.")
+                    archive = archives_root / f"{partial.name}-{uuid4().hex[:8]}"
+                    archive.parent.mkdir(exist_ok=True)
+                    # Archive before retrying; never edit or reuse an unfinished trajectory.
+                    partial.rename(archive)
+                # Also recover a rename interrupted before its checkpoint was committed.
+                for archive in sorted(archives_root.glob(f"{partial.name}-*")):
+                    if str(archive) in recorded_archives:
+                        continue
+                    abandoned.append(str(archive))
+                    for prompt in sorted(archive.rglob("prompt.txt")):
+                        generation = prompt.with_name("generation.json")
+                        if generation.is_file():
+                            record = json.loads(generation.read_text(encoding="utf-8"))
+                            if not isinstance(record, dict) or record.get("model") != job["model"] or record.get("status") not in ("generated", "generation_failed"):
+                                raise ValueError("Invalid archived generation evidence.")
+                            record["directory"] = str(prompt.parent)
+                            record["excluded_from_completed_trials"] = True
+                            self.call_ledger.append(record)
+                        else:
+                            unknown += 1
+            history.append({
+                "resumed_at_utc": datetime.now(UTC).isoformat(),
+                "completed_trials_preserved": len(manifest["trials"]),
+                "archived_partial_trials": abandoned,
+                "unknown_interrupted_requests": unknown,
+            })
+            manifest["unknown_interrupted_requests"] = sum(
+                item["unknown_interrupted_requests"] for item in history
+            )
+            manifest["maximum_generation_requests"] = plan["maximum_generation_requests"] + sum(
+                call.get("excluded_from_completed_trials", False) for call in self.call_ledger
+            ) + manifest["unknown_interrupted_requests"]
+            manifest.pop("preflight_errors", None)
+            manifest.pop("error", None)
+        else:
+            self.call_ledger = []
+            manifest = {
+                **plan, "output_directory": str(directory), "status": "started",
+                "created_at_utc": datetime.now(UTC).isoformat(), "trials": [],
+                "tool_versions": self.validator._tool_versions(),
+            }
+            if rerun_of:
+                manifest["rerun_of"] = rerun_of
+            self.config.save_yaml(str(directory / "config.yaml"))
+        manifest.update(status="started", runner_pid=os.getpid())
+        manifest["elapsed_seconds_excludes_uncheckpointed_interruptions"] = resume
+        manifest["generation_requests"] = len(self.call_ledger)
+        save_checkpoint(directory, manifest, self.call_ledger)
+        if on_started:
+            on_started(directory)
+        targets = {scenario.get("target","azure-bicep") for scenario in plan["scenarios"].values()}
+        errors = self.validator._preflight_errors() if "azure-bicep" in targets else []
+        tf_targets = sorted(targets - {"azure-bicep"})
+        if tf_targets:
+            errors.extend(self.terraform.preflight(tf_targets,initialize=True))
+            manifest["tool_versions"]["terraform"] = getattr(self.terraform,"tool_version",None)
+            if self.config.validation.run_checkov and self.validator.checkov_validator is None and not is_checkov_available():
+                errors.append("Checkov is unavailable.")
+        if not errors and self.config.llm.provider == "copilot" and any(
+            model not in self.clients for model in plan["models"]
+        ):
+            try:
+                manifest["provider_models"] = self.config.llm.discover_models(
+                    allow_login=allow_browser_auth
+                )
+                unavailable = set(plan["models"]) - set(manifest["provider_models"])
+                if unavailable:
+                    errors.append(
+                        f"Copilot models unavailable or disabled: {', '.join(sorted(unavailable))}. "
+                        "Discover available models and explicitly update study.models."
+                    )
+            except (ValueError, RuntimeError) as error:
+                errors.append(str(error))
+        if "azure-bicep" in targets and not self.config.validation.validate_bicep_syntax:
             errors.append(
                 "Controlled studies require Bicep compilation for independent structural evaluation."
             )
@@ -373,18 +577,21 @@ class ControlledStudyRunner:
             errors.extend(self.cloud.preflight(scenario_ids))
         if errors:
             manifest.update(status="blocked_preflight", preflight_errors=errors)
-            _write_json(directory / "manifest.json", manifest)
+            save_checkpoint(directory, manifest, self.call_ledger)
             return manifest
         for scenario_id, scenario in plan["scenarios"].items():
             destination = directory / "specifications" / scenario_id
+            if resume and destination.exists():
+                continue
             for source_id, text in scenario["sources"].items():
                 path = destination / "sources" / f"{source_id}.yml"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding="utf-8")
             _write_json(destination / "resolved.json", scenario["specification"])
             _write_json(destination / "contract.json", scenario["contract"])
-        self.call_ledger = []
         for index, job in enumerate(plan["schedule"], 1):
+            if index <= len(manifest["trials"]):
+                continue
             trial_directory = directory / f"trial-{index:05d}"
             try:
                 if job["model"] not in self.clients:
@@ -395,21 +602,37 @@ class ControlledStudyRunner:
                 manifest.update(
                     status="blocked_model_configuration", error=self._redact(str(error))
                 )
-                _write_json(directory / "manifest.json", manifest)
+                save_checkpoint(directory, manifest, self.call_ledger)
                 return manifest
             record = self._trial(
                 job, plan["scenarios"][job["scenario_id"]], trial_directory
             )
             manifest["trials"].append(record)
-            manifest["physical_model_calls"] = len(self.call_ledger)
+            manifest["generation_requests"] = len(self.call_ledger)
+            manifest["physical_model_calls"] = (
+                None if self.config.llm.provider == "copilot" or resume else len(self.call_ledger)
+            )
             manifest["paid_execution"] = True
-            _write_json(directory / "calls.json", self.call_ledger)
-            _write_json(directory / "manifest.json", manifest)
+            save_checkpoint(directory, manifest, self.call_ledger)
         manifest["summary"] = summarize_trials(
             manifest["trials"],
             seed=self.config.study.random_seed,
             samples=self.config.study.bootstrap_samples,
         )
+        manifest["summary"]["usage"] = {
+            "accounting": "Unique execution/model totals count each saved request once. Condition attribution includes the shared initial candidate in each workflow; never sum condition rows as billing totals.",
+            "unique_execution": call_usage(self.call_ledger),
+            "unique_by_model": {
+                model: call_usage([call for call in self.call_ledger if call["model"] == model])
+                for model in plan["models"]
+            },
+            "workflow_by_model_condition": {
+                model: {
+                    arm: workflow_usage([trial["conditions"][arm] for trial in manifest["trials"] if trial["model"] == model])
+                    for arm in ARMS
+                } for model in plan["models"]
+            },
+        }
         manifest["status"] = (
             "completed"
             if all(
@@ -425,11 +648,20 @@ class ControlledStudyRunner:
             for condition in trial["conditions"].values()
             if condition["cloud"].get("retained_resource_group")
         ]
-        manifest["elapsed_seconds"] = time.perf_counter() - started
+        manifest["elapsed_seconds"] = manifest.get("elapsed_seconds", 0) + time.perf_counter() - started
         manifest["completed_at_utc"] = datetime.now(UTC).isoformat()
         _write_json(directory / "summary.json", manifest["summary"])
-        _write_json(directory / "manifest.json", manifest)
+        save_checkpoint(directory, manifest, self.call_ledger)
         return manifest
+
+    @staticmethod
+    def _target_prompt(target: str) -> str:
+        dialect = (
+            "Generate a complete resource-group-scoped Azure Bicep template for the supplied requirements."
+            if target=="azure-bicep" else
+            f"Generate Terraform HCL resource blocks for {TARGETS[target]['cloud']}. The harness supplies the pinned official provider configuration and region. Do not include terraform, provider, backend, module, data, variable, local or output blocks. Use literal values and direct resource references; executable provisioners and dynamic resource expansion are unsupported by the static validator."
+        )
+        return dialect + "\nChoose the architecture, names, addressing and relationships needed to satisfy the high-level scenario. Do not deploy application workloads or runtime probe VMs. Return complete code only, without fences or prose. Static validation does not prove network behavior.\n"
 
     def _redact(self, text: str) -> str:
         for value in (
@@ -441,12 +673,13 @@ class ControlledStudyRunner:
                 text = text.replace(value, "[REDACTED]")
         return text
 
-    def _generate(self, model: str, prompt: str, directory: Path) -> dict[str, Any]:
+    def _generate(self, model: str, prompt: str, directory: Path, target: str = "azure-bicep") -> dict[str, Any]:
         directory.mkdir(parents=True, exist_ok=False)
         (directory / "prompt.txt").write_text(prompt, encoding="utf-8")
         started = time.perf_counter()
         record: dict[str, Any] = {
             "model": model,
+            "target":target,
             "prompt_sha256": _sha256(prompt),
             "directory": str(directory),
             "usage": None,
@@ -460,7 +693,7 @@ class ControlledStudyRunner:
                 raise ValueError("Model returned empty/non-text output.")
             template = _clean_bicep_response(response)
             (directory / "response.txt").write_text(response, encoding="utf-8")
-            (directory / "template.bicep").write_text(template, encoding="utf-8")
+            (directory / TARGETS[target]["file"]).write_text(template, encoding="utf-8")
             record.update(
                 status="generated",
                 template_sha256=_sha256(template),
@@ -482,7 +715,11 @@ class ControlledStudyRunner:
                 model,
                 [study.input_usd_per_million, study.output_usd_per_million],
             )
-            if input_price is not None and output_price is not None:
+            if (
+                self.config.llm.provider != "copilot"
+                and input_price is not None
+                and output_price is not None
+            ):
                 record["cost_usd"] = (
                     usage["input_tokens"] * input_price
                     + usage["output_tokens"] * output_price
@@ -498,9 +735,18 @@ class ControlledStudyRunner:
         path = Path(candidate["directory"])
         started = time.perf_counter()
         try:
-            validation = self.validator.validate_candidate(
-                path / "template.bicep", scenario_id
-            )
+            target = candidate.get("target","azure-bicep")
+            if target == "azure-bicep":
+                validation = self.validator.validate_candidate(path / "template.bicep",scenario_id)
+            else:
+                compiled = self.terraform.validate(path / "main.tf",target)
+                validation = {"terraform":compiled,"conftest":{"status":"disabled","reason":"ARM-only Rego policies are not applicable to Terraform."}}
+                validation["checkov"] = (
+                    self.validator.validate_checkov(path / "main.tf",scenario_id,"terraform")
+                    if self.config.validation.run_checkov and compiled["status"]=="passed" else
+                    {"status":"not_run","reason":"Terraform validation did not pass."}
+                    if self.config.validation.run_checkov else {"status":"disabled"}
+                )
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
             validation = {
                 "validator": {"status": "error", "error": self._redact(str(error))}
@@ -519,15 +765,16 @@ class ControlledStudyRunner:
     def _trial(
         self, job: dict[str, Any], scenario: dict[str, Any], directory: Path
     ) -> dict[str, Any]:
-        spec = yaml.safe_dump(scenario["specification"], sort_keys=True)
+        spec = render_requirements(scenario["specification"])
+        target = scenario.get("target","azure-bicep")
+        source_file = TARGETS[target]["file"]
+        generation_options = {"target":target} if target != "azure-bicep" else {}
         prompt = (
-            COMMON_PROMPT
+            (self._target_prompt(target) if "target" in scenario else COMMON_PROMPT)
             + "\nScenario:\n"
             + spec
-            + "\nBenchmark requirements:\n"
-            + json.dumps(scenario["contract"], indent=2)
         )
-        initial = self._generate(job["model"], prompt, directory / "shared-initial")
+        initial = self._generate(job["model"], prompt, directory / "shared-initial",**generation_options)
         initial_validation = self._visible(initial, job["scenario_id"])
         trajectories = {}
         for arm in job["arm_order"]:
@@ -540,7 +787,7 @@ class ControlledStudyRunner:
                 ):
                     break
                 previous = (
-                    Path(candidates[-1]["directory"]) / "template.bicep"
+                    Path(candidates[-1]["directory"]) / source_file
                 ).read_text(encoding="utf-8")
                 instruction = "Review and improve the complete template against the scenario. No validator diagnostics are supplied."
                 if arm == "tool_feedback":
@@ -552,6 +799,7 @@ class ControlledStudyRunner:
                     job["model"],
                     prompt + "\n" + instruction + "\nCurrent template:\n" + previous,
                     directory / arm / f"iteration-{iteration:02d}",
+                    **generation_options,
                 )
                 candidates.append(revised)
                 validations.append(self._visible(revised, job["scenario_id"]))
@@ -567,7 +815,13 @@ class ControlledStudyRunner:
                     **self.scenario_parameters.get(job["scenario_id"], self.parameters),
                     "studySuffix": "local",
                 }
-                evaluation = evaluate_structure(
+                evaluation = {
+                    "status": "not_assessed", "checks": [],
+                    "reason": "Human-written requirements await independent human review; no resource-shape oracle is applied.",
+                } if self.config.study.assessment_mode == "human_review" else {
+                    "status": "not_automated", "checks": [],
+                    "reason": "No independent high-level requirements evaluator is implemented.",
+                } if "target" in scenario else evaluate_structure(
                     Path(candidate["directory"]) / "template.json",
                     job["scenario_id"],
                     parameters,
@@ -579,7 +833,7 @@ class ControlledStudyRunner:
                 )
             final = candidates[-1]
             visible_passed = self._passed(validations[-1])
-            structural_passed = (
+            structural_passed = None if self.config.study.assessment_mode == "human_review" else (
                 final["status"] == "generated" and evaluations[-1]["status"] == "passed"
             )
             cloud = {
@@ -650,7 +904,7 @@ class ControlledStudyRunner:
                         "runtime_status": "not_run",
                         "reason": "Candidate did not pass visible and structural checks.",
                     }
-            acceptance = (
+            acceptance = None if self.config.study.assessment_mode == "human_review" else (
                 visible_passed
                 and structural_passed
                 and (
@@ -677,7 +931,11 @@ class ControlledStudyRunner:
             conditions[arm] = {
                 "accepted": acceptance,
                 "structural_accepted": structural_passed,
-                "acceptance_scope": "full_deployment_and_runtime"
+                "requirement_assessment": {"status": "awaiting_human_review", "decision": None}
+                if self.config.study.assessment_mode == "human_review" else None,
+                "acceptance_scope": "human_review_pending"
+                if self.config.study.assessment_mode == "human_review"
+                else "full_deployment_and_runtime"
                 if self.config.cloud.enabled
                 else "finite_structural_only",
                 "visible_checks_passed": visible_passed,
@@ -701,6 +959,7 @@ class ControlledStudyRunner:
                 }
                 if all(item["usage"] is not None for item in candidates)
                 else None,
+                "usage_accounting": call_usage(candidates),
                 "candidates": [item["directory"] for item in candidates],
                 "structural_evaluations": evaluations,
                 "cloud": cloud,
@@ -720,5 +979,15 @@ class ControlledStudyRunner:
             "specification_sha256": scenario["specification_sha256"],
             "conditions": conditions,
         }
+        if self.config.study.assessment_mode == "human_review":
+            _write_json(directory / "requirements-review.json", {
+                "status": "awaiting_human_review",
+                "requirements": spec,
+                "scope": "Review preparation only. Model and condition are not blinded. No human evaluation or quality score has been recorded.",
+                "candidates": {
+                    arm: {"artifact_directory": value["candidates"][-1], "decision": None, "rationale": None}
+                    for arm, value in conditions.items()
+                },
+            })
         _write_json(directory / "result.json", record)
         return record

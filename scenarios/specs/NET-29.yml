@@ -1,0 +1,11 @@
+name: Network integration for managed containers
+objective: Reserve an Azure subnet for a managed container service with private network integration.
+family: service-integration
+supported_targets: [azure-bicep, azure-terraform]
+acceptance_criteria:
+  - The subnet is prepared for the managed container service's network integration.
+  - The service subnet is separate from general-purpose workload subnets.
+architectural_requirements:
+  - Avoid deploying application containers as part of this network-only task.
+security_requirements:
+  - Do not introduce public workload interfaces.

@@ -1,0 +1,9 @@
+name: Dual-stack private network
+objective: Support both IPv4 and IPv6 addressing for workloads in an Azure network.
+family: addressing
+supported_targets: [azure-bicep, azure-terraform]
+acceptance_criteria:
+  - The network and workload subnet support both address families.
+  - Subnet prefixes belong to their corresponding network prefixes.
+security_requirements:
+  - IPv6 support must not bypass the workload's inbound access restrictions.

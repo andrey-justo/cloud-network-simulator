@@ -75,10 +75,82 @@ Its results are not live model evaluation results.
 
 ### 3. Run a live model experiment
 
-#### Microsoft Entra ID (AAD) for the prepared static pilot
+#### Copilot SDK for the prepared static pilot
 
 The prepared [smoke](../configs/smoke-static.yaml) and
-[pilot](../configs/pilot-static.yaml) select `llm.azure_auth_mode: azure_cli`.
+[pilot](../configs/pilot-static.yaml) select `llm.provider: copilot`.
+Install the pinned optional SDK:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e '.[dev,copilot]'
+```
+
+The SDK downloads/verifies its runtime on first use, but signing in still
+requires a supported authentication method. For local interactive use, install
+the standalone [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli),
+run `copilot` in your terminal and complete its sign-in flow. VS Code chat
+authentication is not automatically shared. Standalone CLI 1.0.103 was installed
+and verified locally; browser authorization and SDK model discovery succeeded.
+If the current terminal resolves the older VS Code shim, use the installed
+WinGet alias directly:
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe" login --device-code
+```
+
+Wait for the terminal to confirm successful authentication before retrying
+discovery. Complete authorization locally; never paste device codes or tokens
+into chat.
+
+The application always reuses cached CLI credentials first. In an interactive
+terminal, discovery/study execution opens browser authentication only when the
+cache cannot authenticate. In a script or agent shell, allow it explicitly:
+
+```powershell
+# Login and list models without generating anything.
+.\.venv\Scripts\python.exe -m network_simulation.copilot_client --login
+# Allow browser authentication if needed during a paid static run.
+.\.venv\Scripts\python.exe main.py --mode study --config configs\pilot-static.yaml --execute --login
+```
+
+`--login` does not force another login when the credential cache works. Library
+calls and noninteractive execution do not open browsers without permission.
+Failed/cancelled sign-in blocks generation; login is not retried indefinitely.
+Planning never triggers authentication: study `--login` requires `--execute`
+and cannot be combined with a dry run. Tokens remain managed by the official CLI
+and SDK, not read/copied into application files or experiment manifests.
+Never copy credentials out of this chat or put tokens into YAML.
+
+Discover enabled model IDs without sending a generation prompt:
+
+```powershell
+.\.venv\Scripts\python.exe -m network_simulation.copilot_client --list-models
+.\.venv\Scripts\python.exe main.py --mode study --config configs\smoke-static.yaml --dry-run
+```
+
+Both configured IDs must appear in discovery before execution. All requested
+models are checked before the first study trial; unavailable models block the
+run without substitution. If needed, explicitly update `study.models` and
+`llm.model` to available IDs before freezing the protocol.
+
+Each generation has a fresh tool-free session with no workspace retrieval,
+skills, memory, user instruction discovery or prior chat history. Only the
+experiment prompt carries scenario/candidate/feedback context. SDK foundation
+instructions and organization policies still apply. Output-token limits are
+passed through the SDK model-capability override; temperature/top-p are not
+supported and fail explicitly.
+
+`--execute` permits consuming Copilot allowance/credits, not free unlimited
+requests. Check model billing/allowance first. The smoke permits up to six SDK
+generation requests; the full pilot permits 900. SDK backend retries mean
+physical inference calls cannot be bounded by these counters. Missing usage
+and dollar costs remain `null`; Azure token-price settings are not treated as
+Copilot charges. No Azure endpoint/key or Entra login is needed for Copilot.
+
+#### Microsoft Entra ID (AAD) for the Azure Responses alternative
+
+For a separate Azure configuration, set `llm.provider: azure_responses` and
+`llm.azure_auth_mode: azure_cli`.
 Install the optional SDK with:
 
 ```powershell

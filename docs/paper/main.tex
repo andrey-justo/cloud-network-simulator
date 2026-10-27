@@ -1,0 +1,538 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\input{generated/results.tex}
+
+\title{From Human-Written Network Requirements to Infrastructure as Code:\\
+An Exploratory Paired Study of Validator Feedback Across Azure and AWS}
+\author{Author information to be completed}
+\date{Working draft --- \today}
+
+\begin{document}
+\maketitle
+\begin{center}
+\small\textbf{Status: exploratory, artifact-backed working draft; not submission-ready.}\\
+Static validator outcomes are measured. Requirement satisfaction is not yet assessed.
+\end{center}
+
+\begin{abstract}
+Generating infrastructure as code (IaC) from human-written requirements involves
+more than producing compilable configuration. We examine this distinction in an
+exploratory study of \SpecificationCount{} network specifications expanded into
+\VariantCount{} supported Azure/Bicep, Azure/Terraform, and AWS/Terraform variants.
+Two configured model identifiers produce \PrimaryUnits{} paired experimental units
+and \PrimaryWorkflows{} condition workflows. Each unit shares an initial candidate
+across one-shot generation, blind refinement, and refinement with compiler and
+static-policy diagnostics. Refinement is bounded by \IterationBudget{} attempts.
+The primary analysis retains the original completed outcomes, including operational
+failures, rather than replacing them after inspecting results.
+AWS/Terraform illustrates a large gap between compilation and policy convergence:
+\AWSInitialCompiled{}/\AWSInitialUnits{} initial candidates compile, but
+\AWSInitialPassed{}/\AWSInitialUnits{} pass all enabled visible validators.
+Feedback-guided workflows reach \AWSFeedbackPassed{}/\AWSFeedbackUnits{}.
+All compiling initial AWS candidates fail the same two policies concerning flow
+logging and default-security-group restrictions. This pattern occurs in both models
+and is consistent with policy requirements absent from some written scenarios;
+it does not establish a model-specific cause. We report paired outcomes,
+model-stratified results, token consumption, and an audited operational-retry
+sensitivity analysis. The observations support bounded claims about convergence
+to the configured validators, not semantic requirement satisfaction, deployment
+correctness, general cloud difficulty, or model superiority.
+\end{abstract}
+
+\section{Introduction}
+IaC generation from requirements can fail at several distinct levels: language
+validity, provider-schema consistency, policy compliance, interpretation of the
+requested design, deployability, and runtime behavior. Treating these levels as a
+single acceptance score can obscure what an experiment actually measures.
+Terraform's validation command, for example, checks syntax and internal consistency
+but does not validate remote services or provider APIs~\cite{terraformvalidate}.
+Likewise, Checkov checks a collection of static misconfiguration policies rather
+than proving end-to-end network behavior~\cite{checkov}.
+
+Our motivating goal is to understand where models struggle when translating
+human-readable network requirements. The present experiment addresses only an
+initial, measurable part of that goal: whether visible validation diagnostics
+help bounded refinement converge to the configured static checks. Independent
+assessment of the requirements themselves remains future work.
+
+The contributions of this working draft are:
+\begin{enumerate}
+  \item A file-backed, requirements-only network corpus and a paired workflow
+  design that separates initial generation, blind refinement, and diagnostic
+  feedback.
+  \item An artifact-backed descriptive analysis across three cloud/IaC targets,
+  with explicit model stratification, denominators, and shared-candidate accounting.
+  \item A policy-level examination of the AWS/Terraform gap and a clear separation
+  between validator convergence, operational reliability, and unassessed semantics.
+\end{enumerate}
+We do not claim to invent feedback-driven IaC generation or to establish
+confirmatory statistical findings.
+
+\section{Related Work and Measurement Scope}
+Palavalli and Santolucito investigate feedback loops for LLM-based IaC
+generation~\cite{palavalli2024feedback}. Their work establishes that returning
+errors and warnings to a generator is prior art. Our potential contribution must
+therefore rest on the paired controls, network-requirements corpus, multi-target
+analysis, and the distinction between policy convergence and requirement
+satisfaction, not on the existence of a repair loop.
+
+The literature review is preliminary and is not a systematic review. A
+venue-specific related-work expansion is necessary before submission.
+The official Terraform and Checkov descriptions~\cite{terraformvalidate,checkov}
+also motivate an important measurement boundary: static validation success is
+neither a deployment test nor a guarantee that a generated system realizes a
+user's intended architecture or connectivity.
+
+\section{Research Questions}
+\paragraph{RQ1: Static convergence.}
+Within the saved scenario--model pairs, how do final compilation and
+schema-validation results and
+visible-validator outcomes differ between diagnostic feedback and blind
+refinement under the same maximum attempt budget?
+\paragraph{RQ2: Target and model patterns.}
+What descriptive differences appear after stratifying by cloud/IaC target and
+configured model identifier, and what policy failures explain the observed
+AWS/Terraform pattern?
+\paragraph{RQ3: Resource use.}
+What observed token and workflow-latency costs accompany these outcomes,
+accounting for shared initial candidates and unknown usage?
+
+These are exploratory questions. The AWS policy analysis was prompted by the
+observed results and is explicitly post hoc. No preregistration, confirmatory
+hypothesis test, population-level effect, or causal model comparison is claimed.
+
+\section{Study Design}
+\subsection{Corpus and targets}
+The corpus consists of \SpecificationCount{} authored YAML specifications, not
+requirements sampled from users or organizations. Specifications describe
+objectives and acceptance, connectivity, security, and architectural requirements.
+Their specificity varies: some prescribe components, addressing, or ports.
+Calling them human-written does not make this a human-subjects study or establish
+that they represent the distribution of real organizational requests.
+
+The target expansion yields 29 Azure/Bicep, 19 Azure/Terraform, and 18
+AWS/Terraform variants. Original scenarios NET-01--NET-10 retain their
+Azure/Bicep scope. Newer scenarios declare supported targets in their source files.
+Unsupported pairs are exclusions, not failures. Consequently, raw cross-target
+rates mix different scenario sets. An appendix reports the
+\MatchedIntentCount{} intents shared by all three targets, but even that subset
+does not make the target-specific policy suites equivalent.
+
+Prompts render the resolved specifications as prose and requirement lists. They
+do not append internal resource graphs, exact-resource answer keys, or JSON/YAML
+solution examples. The model still receives target-specific output constraints.
+An earlier resource-graph expansion was withdrawn because it changed the task
+into low-level graph translation. That expansion and earlier contract-fed pilots
+are excluded from this paper's primary dataset.
+
+\subsection{Experimental unit and conditions}
+The unit is scenario variant $\times$ model identifier $\times$ repetition.
+Two identifiers, \texttt{\ModelOne{}} (M1) and \texttt{\ModelTwo{}} (M2), each have
+one repetition per supported variant. These are service identifiers, not
+independently verified architecture or immutable model-weight versions.
+
+Each unit generates one common initial candidate, then evaluates the paired
+conditions in Table~\ref{tab:conditions}. The common candidate is not three
+independent model generations. Subsequent refinement sessions are fresh,
+tool-free Copilot SDK sessions receiving the scenario and previous candidate;
+only the feedback condition receives visible diagnostic reports.
+
+\begin{table}[tbp]
+\centering\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.20\linewidth}>{\raggedright\arraybackslash}p{0.17\linewidth}>{\raggedright\arraybackslash}p{0.52\linewidth}}
+\toprule
+Condition & Maximum attempts & Revision information \\
+\midrule
+One-shot (S) & 1 & Initial scenario and target/output constraints. \\
+Blind refinement (B) & \IterationBudget{} & Scenario and previous candidate, without validator diagnostics. \\
+Tool feedback (F) & \IterationBudget{} & Same inputs plus compiler/schema and enabled policy diagnostics. \\
+\bottomrule
+\end{tabular}
+\caption{Conditions. All three share the same initial candidate within a unit.
+The refinement arms have equal maximum, not equal realized, budgets.}
+\label{tab:conditions}
+\end{table}
+
+Each arm stops on a visible-validator pass, generation failure, or exhaustion of
+the attempt budget. Blind refinement receives no diagnostic content, although
+the decision to request another revision implicitly reveals non-convergence.
+The visible checks are therefore both an intervention input and a stopping
+criterion. We measure the final candidate under that rule, not an oracle-selected
+best candidate. The one-shot comparison additionally changes the available budget;
+the feedback-versus-blind comparison is the closer diagnostic-information control.
+
+Scenario/model jobs and arm order are shuffled with scheduler seed 1729.
+This seed does not control service-side sampling. Temperature and top-$p$ are
+unset. The configured output limit is \OutputTokenBudget{} tokens per generation.
+Copilot SDK 1.0.22 is used with workspace context, tools, memory, and local
+instruction discovery disabled. Provider foundation instructions and service
+policies remain outside experimental control.
+
+\subsection{Validation and implementation constraints}
+Bicep CLI 0.48.1 compiles Azure/Bicep to ARM. Terraform 1.9.8 validates against
+the pinned AzureRM 4.0.1 and AWS 5.70.0 providers, with backend use disabled for
+initialization. No Terraform plan/apply or cloud deployment is performed.
+Checkov 3.3.29 scans the candidate when compilation/schema validation succeeds.
+Conftest/OPA is disabled for this mixed-target run.
+
+The generation harness imposes a restricted Terraform output language: resource
+blocks, literal values, and direct references; it supplies the pinned provider
+prelude. Modules, data sources, variable/local/output blocks, executable
+provisioners, and dynamic expansion are not supported. These restrictions limit
+external validity and can prevent otherwise reasonable Terraform designs.
+
+The visible-pass outcome requires every enabled visible validator to pass;
+disabled validators are neutral. A Checkov pass in this run requires a nonzero
+passed-check count, no reported failed checks, and no parsing errors. It is not
+a complete proof of security. Policy applicability and coverage depend on both
+the target and the resources the model chooses to emit.
+
+The explicit assessment mode leaves both requirement acceptance and independent
+structural acceptance \emph{unassessed}. No exact-resource oracle grades even the
+original NET scenarios in this run. No deployment, reachability, DNS-resolution,
+cost-of-infrastructure, or requirement-completeness result is inferred.
+
+\subsection{Evidence, interruptions, and analysis populations}
+The evidence consists of saved prompts, responses, candidate files, validator
+reports, per-generation usage metadata, complete paired results, and managed
+checkpoints. The run identifier is:
+\begin{center}\small\texttt{\StudyRun{}}\end{center}
+A Windows checkpoint-replacement interruption required recovery during collection.
+Fifty-four checkpointed units and one fully saved unit were preserved before
+resuming. The completed-unit recovery was not a model regeneration.
+
+The primary analysis uses the original completed checkpoint before an explicitly
+authorized operational retry. It includes one failed shared generation in
+NET-10/M2, affecting \PrimaryOperationalWorkflows{} condition workflows.
+These remain operational failures in the original denominators, not evidence of
+incorrect requirement interpretation.
+
+The later retry is a separate sensitivity analysis. It repeats only that failed
+paired unit, with its original settings and arm order, preserves the other 131
+paired results, and retains the original evidence and failed request in accounting.
+It is not a new independent repetition. We report original and replacement-based
+results separately rather than silently promoting a repaired dataset to the
+primary analysis.
+
+\subsection{Metrics and descriptive analysis}
+For target/model stratum $g$ and condition $a$, let $n_g$ be the number of saved
+paired units, including operational failures. We report
+\[
+ \widehat p_{g,a}^{\,V}
+ = \frac{\sum_{i\in g}\mathbf{1}(\text{final visible pass}_{i,a})}{n_g},
+ \qquad
+ \widehat p_{g,a}^{\,C}
+ = \frac{\sum_{i\in g}\mathbf{1}(\text{final compilation/schema pass}_{i,a})}{n_g}.
+\]
+Missing compilation evidence from a generation failure is unknown, not an
+observed compiler rejection; the pass-rate denominator nevertheless retains
+that attempted unit. Acceptance has no percentage because it has not been assessed.
+
+For feedback versus blind refinement, $N_{01}$ denotes pairs where only feedback
+passes and $N_{10}$ pairs where only blind refinement passes. The descriptive
+paired difference is
+\[
+ \widehat\Delta_g = 100\,\frac{N_{01}-N_{10}}{n_g}
+ \quad\text{percentage points}.
+\]
+Pairs are not independent across related intents, targets, or specification
+families. One service generation per initial scenario/model cell does not estimate
+sampling variability. We therefore do not attach $p$-values, independence-based
+confidence intervals, or significance labels to these exploratory counts.
+
+\section{Results}
+\subsection{Compilation and visible-validator convergence}
+Table~\ref{tab:pooled} pools the two models by summing counts and denominators,
+not by averaging percentages. Model-stratified results are given in
+Appendix~\ref{app:models}; they are necessary before discussing model differences.
+Each target has a different scenario composition and policy surface.
+
+\begin{table}[tbp]
+\centering\small
+\begin{tabular}{llrrr}
+\toprule
+Target & Arm & $n$ & Compilation/schema pass & Visible pass \\
+\midrule
+\PooledResultRows
+\bottomrule
+\end{tabular}
+\caption{Original completed outcomes, pooled across M1 and M2.
+S: one-shot; B: blind; F: feedback. The original shared generation failure has
+unknown compilation status in all three workflows and remains in the denominator.}
+\label{tab:pooled}
+\end{table}
+
+The AWS/Terraform initial candidates demonstrate that compilation alone can
+produce a misleading impression of success:
+\AWSInitialCompiled{}/\AWSInitialUnits{} compile but none passes every enabled
+visible check. Feedback reaches \AWSFeedbackPassed{}/\AWSFeedbackUnits{} visible
+passes. This is a result about the configured validator workflow, not evidence
+that those artifacts satisfy all stated requirements or work after deployment.
+
+\begin{table}[tbp]
+\centering\small
+\begin{tabular}{llrrrrrr}
+\toprule
+Target & Model & $n$ & $N_{00}$ & $N_{01}$ & $N_{10}$ & $N_{11}$ & $\widehat\Delta$ (pp) \\
+\midrule
+\PairedResultRows
+\bottomrule
+\end{tabular}
+\caption{Paired visible outcomes: blind refinement first, feedback second.
+$00$: neither passes; $01$: feedback only; $10$: blind only; $11$: both pass.
+These are descriptive within-stratum contrasts, not significance tests.}
+\label{tab:paired}
+\end{table}
+
+\subsection{What explains the AWS pattern?}
+Table~\ref{tab:aws} counts \emph{workflows} with at least one failure of each
+policy, deduplicating repeated resource-level occurrences of the same check.
+Every compiling initial AWS candidate fails
+\texttt{CKV2\_AWS\_11} (VPC flow logging) and
+\texttt{CKV2\_AWS\_12} (default-security-group restrictions):
+\AWSInitialFlowFailures{} and \AWSInitialDefaultSGFailures{} workflows,
+respectively. Compiler failures are not scanned and must not be interpreted as
+having passed these policies.
+
+\begin{table}[tbp]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{llrrrrrr}
+\toprule
+Model & Arm & $n$ & Compiled & Flow-log fail & Default-SG fail & Visible pass & Mean attempts \\
+\midrule
+\AWSPolicyRows
+\bottomrule
+\end{tabular}
+\caption{AWS/Terraform policy audit by model and condition.
+Failure counts indicate workflows containing the named violation, not independent
+policy tests. Unlisted policies can also cause a visible failure.}
+\label{tab:aws}
+\end{table}
+
+This common baseline across both identifiers does not isolate a model effect.
+The feedback outcomes differ descriptively between M1 and M2, but each has only
+18 initial AWS generations and one repetition per scenario. The comparison is
+also affected by stochastic generation, service timing, and policy applicability.
+
+A concrete measurement concern is the difference between written requirements
+and implicit policy expectations. NET-11 asks for a private isolated workload
+network without public addressing; it does not explicitly require flow-log
+infrastructure or management of the VPC's default security group. The policy
+suite imposes these expectations nonetheless. Such policies may be reasonable
+organizational baselines, but here they are not uniformly part of the initial
+specification. Feedback can therefore teach the evaluator's implicit requirements,
+not merely correct the model's interpretation of the supplied requirements.
+
+This is evidence consistent with an evaluator-alignment explanation, not a
+causal identification of the root cause. Establishing causality would require,
+for example, controlled specification/policy-disclosure ablations and independent
+review of equivalent valid designs. It would be premature to conclude that AWS
+is intrinsically harder or that a model lacks AWS knowledge.
+
+\subsection{Tokens and recorded latency}
+The original completed run contains \PrimaryRequests{} saved generation requests:
+\PrimaryKnownRequests{} have reported usage and \PrimaryUnknownRequests{} has
+unknown usage. The observed subtotal is \PrimaryInputTokens{} input plus
+\PrimaryOutputTokens{} output tokens (\PrimaryTotalTokens{} total).
+Table~\ref{tab:unique} counts each saved request once.
+
+\begin{table}[tbp]
+\centering\small
+\begin{tabular}{lrrrrr}
+\toprule
+Model & Known requests & Unknown & Input tokens & Output tokens & Total tokens \\
+\midrule
+\UniqueUsageRows
+\bottomrule
+\end{tabular}
+\caption{Primary unique-request accounting across all targets, including the
+operational failure. Unknown usage is not imputed as zero.}
+\label{tab:unique}
+\end{table}
+
+\begin{table}[tbp]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrrrr}
+\toprule
+Model & Arm & Workflows & Known req. & Unknown & Input tokens & Output tokens & Mean seconds \\
+\midrule
+\AttributedUsageRows
+\bottomrule
+\end{tabular}
+\caption{Workflow-attributed usage and latency across the mixed-target workload.
+Each arm includes the shared initial generation. \emph{Do not sum these rows as
+an execution or billing total.} These pooled accounting figures are not
+target-controlled performance comparisons.}
+\label{tab:attributed}
+\end{table}
+
+Recorded workflow latency attributes the shared initial work to each condition
+and includes generation, SDK overhead, and validation; it is not pure model
+inference time. Whole-run wall time additionally includes operational interruption
+and idle time, so it is not used as a model-speed measure.
+Copilot allowance/credit accounting is not an Azure token-price invoice.
+No monetary cost is inferred. SDK/backend retries may involve additional
+unobserved physical inference calls beyond the saved request ledger.
+
+\subsection{Operational-retry sensitivity}
+The authorized retry uses \RetryNewRequests{} additional generation requests.
+The replacement-based dataset has \RecoveredRequests{} saved requests and
+\RecoveredOperationalWorkflows{} operational-failure workflows. Unique accounting
+still includes the original failed request and has an observed token subtotal of
+\RecoveredTotalTokens{}; the previously unknown usage remains unknown.
+Table~\ref{tab:retry} reports replacement-based outcomes separately from
+Table~\ref{tab:pooled}. The replacement changes no other paired result and must
+not be counted as a second independent NET-10/M2 observation.
+
+\begin{table}[tbp]
+\centering\small
+\begin{tabular}{llrrr}
+\toprule
+Target & Arm & $n$ & Compilation/schema pass & Visible pass \\
+\midrule
+\RecoveredResultRows
+\bottomrule
+\end{tabular}
+\caption{Sensitivity analysis after the audited operational replacement.
+Original outcomes and failed-request accounting remain available in the audit.}
+\label{tab:retry}
+\end{table}
+
+\section{Threats to Validity}
+\paragraph{Construct validity.}
+Visible pass is a narrow static-convergence metric. The same validators supply
+feedback and determine the outcome; there is no held-out semantic assessment.
+Policy compliance can add infrastructure not requested by a scenario, while
+resource omission can alter which checks are applicable. Neither a static pass
+nor the absence of reported violations proves requirement completeness or
+security. The paper does not score human ambiguity, underspecification, or
+alternative valid architectures.
+
+\paragraph{Internal validity.}
+Sharing the initial candidate supports paired comparisons but correlates all
+three condition outcomes. Early stopping makes realized token and attempt
+budgets unequal. Blinding only diagnostic content does not remove the implicit
+non-convergence signal from a request for another revision. Fresh sessions and
+shuffled ordering reduce some contamination and timing effects, but they do not
+control provider sampling, model updates, or all time-of-day effects. Operational
+recovery and the explicitly authorized post-run retry must remain auditable.
+
+\paragraph{External validity.}
+The corpus is authored and small, not a representative requirements sample.
+Scenarios overlap conceptually and through inheritance. The target matrix is
+unbalanced, resource-language restrictions constrain feasible designs, and
+Checkov's AWS, Azure/Terraform, and ARM policy surfaces are not equivalent.
+Two model identifiers do not represent all models or deployment environments.
+No real application, cloud deployment, production workload, or human-user study
+is evaluated.
+
+\paragraph{Conclusion validity.}
+There is one initial generation per scenario/model cell, no power analysis, and
+no preregistered confirmatory analysis. Apparent differences between 18-case AWS
+strata must not be called significant or generalized as model superiority.
+Post-hoc discovery of recurring policies motivates hypotheses rather than
+confirming them. Known-token subtotals and composite latency must not be
+misrepresented as full inference usage, dollar cost, or provider-independent speed.
+
+\section{What Would Make the Study Submission-Ready?}
+A stronger next study should freeze its corpus, policy disclosure, primary
+endpoint, and analysis before collecting a new dataset. We propose:
+\begin{enumerate}
+  \item An independent requirements rubric accepting semantically valid alternative
+  designs, with blinded expert assessment, disagreement resolution, and reported
+  inter-rater agreement. A high-level requirement must not secretly demand one
+  exact resource name or topology.
+  \item A controlled ambiguity/underspecification study with clearly authored
+  variants of the same intent. This is needed to address limitations of
+  human-written requirements directly, rather than inferring them from compiler
+  or policy failures.
+  \item A policy-disclosure ablation: requirements alone versus requirements plus
+  an explicitly documented policy baseline, with held-out assessment in both cases.
+  This would test the evaluator-alignment explanation of the AWS pattern.
+  \item Matched cross-target intents, additional independent repetitions, and a
+  justified precision or power plan. Analysis should account for paired arms,
+  repeated intents, families, target variants, and multiple comparisons.
+  \item Safe deployment/runtime checks on a reviewed subset, measuring reachability,
+  DNS behavior, exposure, and other relevant semantics. These remain separate
+  endpoints, not automatic consequences of a static pass.
+  \item A reviewed artifact release with exact dependency versions, policy scope,
+  hashes, raw operational failures, and retry provenance. Service identifiers
+  and usage coverage must be retained without credentials.
+\end{enumerate}
+These are proposed validation steps, not experiments already performed.
+
+\section{Conclusion}
+The defensible current finding is a descriptive, paired association between
+diagnostic feedback and convergence to the configured static validators in a
+bounded network-IaC workload. Compilation and policy convergence differ sharply,
+especially for AWS/Terraform. Recurring policy failures across both models make
+an implicit-policy explanation plausible and undermine a simple attribution to
+one model. Independent requirement satisfaction remains unassessed. The current
+artifact is suitable as the basis for an exploratory workshop/tool-study draft
+or a pilot section, subject to venue expectations and further review; it is not
+yet a confirmatory evaluation of human-requirements interpretation.
+
+\section*{Reproducibility, Availability, and Draft Disclosure}
+The accompanying exporter derives the tables from saved checkpoints and final
+validator reports without executing model requests or deploying infrastructure.
+It records per-artifact hashes and the primary checkpoint hash:
+\begin{center}\small\texttt{\PrimarySourceHash}\end{center}
+Aggregate data and generated tables accompany the draft. The local raw evidence
+is not claimed to be a public, archived dataset, and no artifact DOI is claimed.
+Before submission, the authors must complete the bibliography, authorship,
+venue formatting, artifact release, and independent verification of the
+manuscript. This working draft and its analysis tooling were prepared with AI
+assistance and require human scientific review.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\appendix
+\section{Model-Stratified Primary Outcomes}
+\label{app:models}
+Table~\ref{tab:models} preserves the model identifier distinction rather than
+treating model outputs as interchangeable replications.
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lllrrr}
+\toprule
+Target & Model & Arm & $n$ & Compilation/schema pass & Visible pass \\
+\midrule
+\ModelResultRows
+\bottomrule
+\end{tabular}
+\caption{Original completed results by target, model, and condition.
+M1: \texttt{\ModelOne{}}; M2: \texttt{\ModelTwo{}}.}
+\label{tab:models}
+\end{table}
+
+\section{Common-Intent Sensitivity}
+Table~\ref{tab:matched} restricts the primary observations to intents supported
+by all three targets (NET-11--NET-27). This removes one source of scenario-set
+imbalance but not policy-suite differences, implementation restrictions, or
+within-intent dependence.
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{llrrr}
+\toprule
+Target & Arm & $n$ & Compilation/schema pass & Visible pass \\
+\midrule
+\MatchedResultRows
+\bottomrule
+\end{tabular}
+\caption{Primary results restricted to the \MatchedIntentCount{} common intents,
+pooled across two models. These are not new observations or independent cloud replications.}
+\label{tab:matched}
+\end{table}
+\end{document}

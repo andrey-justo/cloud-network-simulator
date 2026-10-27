@@ -1,0 +1,11 @@
+name: Internet egress for private workloads
+objective: Allow private workloads to initiate Internet connections without direct inbound exposure.
+family: egress
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Private workloads can initiate outbound Internet connections.
+  - Return traffic for established connections is permitted.
+connectivity_requirements:
+  - Unsolicited Internet connections to private workloads are blocked.
+security_requirements:
+  - Workload interfaces must not receive public addresses.

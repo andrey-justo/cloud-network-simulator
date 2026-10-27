@@ -8,12 +8,24 @@ class StudyConfig:
     max_iterations: int = 5
     random_seed: int = 1729
     models: list[str] = field(default_factory=list)
+    targets: list[str] = field(default_factory=lambda: ["azure-bicep"])
+    assessment_mode: str = "finite_contract"
     input_usd_per_million: float | None = None
     output_usd_per_million: float | None = None
     model_prices: dict[str, list[float]] = field(default_factory=dict)
     bootstrap_samples: int = 2000
 
     def validate(self) -> None:
+        from network_simulation.scenario_targets import TARGETS
+        if self.assessment_mode not in ("finite_contract", "human_review"):
+            raise ValueError("study.assessment_mode must be finite_contract or human_review.")
+
+        if (
+            not isinstance(self.targets, list) or not self.targets
+            or any(not isinstance(target, str) or target not in TARGETS for target in self.targets)
+            or len(set(self.targets)) != len(self.targets)
+        ):
+            raise ValueError(f"study.targets must be unique supported targets: {', '.join(TARGETS)}.")
         for name in ("repetitions", "max_iterations", "bootstrap_samples"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"study.{name} must be a positive integer.")

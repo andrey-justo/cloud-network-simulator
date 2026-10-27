@@ -11,8 +11,7 @@ study:
   models: [gpt-5.3-codex, gpt-6.1-sol]
   bootstrap_samples: 2000
 llm:
-  provider: azure_responses
-  azure_auth_mode: azure_cli
+  provider: copilot
   model: gpt-5.3-codex
   max_tokens: 8000
 validation:

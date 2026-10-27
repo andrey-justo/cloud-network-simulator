@@ -13,8 +13,7 @@ study:
   input_usd_per_million: null
   output_usd_per_million: null
 llm:
-  provider: azure_responses
-  azure_auth_mode: azure_cli
+  provider: copilot
   model: gpt-5.3-codex
   max_tokens: 8000
 validation:

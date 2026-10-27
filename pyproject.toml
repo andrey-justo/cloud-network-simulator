@@ -12,9 +12,13 @@ dependencies = [
   "pyyaml>=6.0",
   "requests>=2.31.0",
   "python-dotenv>=1.0.0",
+  "bc-python-hcl2==0.4.3",
 ]
 
 [project.optional-dependencies]
+copilot = [
+  "github-copilot-sdk==1.0.22",
+]
 azure-auth = [
   "azure-identity>=1.23,<2",
 ]
@@ -30,7 +34,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-network_simulation = ["prompts/*.md"]
+network_simulation = ["prompts/*.md", "web/*.mjs", "web/public/*.html", "web/public/*.css", "web/public/*.js", "web/public/*.mjs"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

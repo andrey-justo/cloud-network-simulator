@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network IaC Study Monitor</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">N</span><span>NETWORK LAB <span class="muted">/ STUDIES</span></span></div>
+    <span id="mode-label" class="readonly">READ-ONLY OBSERVATORY</span>
+  </header>
+  <main>
+    <section class="heading">
+      <div><p class="eyebrow">CLOUD NETWORK SIMULATOR</p><h1>Execution monitor</h1><p class="intro">From generated infrastructure to measurable outcomes.</p></div>
+      <div class="refresh-controls"><label class="toggle"><input id="auto-refresh" type="checkbox" checked> Auto-refresh / 5s</label><button id="refresh" type="button">Refresh now</button></div>
+    </section>
+    <nav class="tabs" aria-label="Study workspace"><button id="monitor-tab" type="button" aria-pressed="true">Monitor</button><button id="run-tab" type="button" aria-pressed="false">Run / rerun</button></nav>
+    <section id="runner" class="panel" aria-label="Static experiment runner" hidden>
+      <p class="eyebrow">STATIC EXPERIMENTS ONLY</p><h2>Run, resume or rerun</h2>
+      <p>Model calls consume your provider allowance. Azure deployment is never enabled here.</p>
+      <p class="micro">Keep this dashboard open during execution. Closing its canvas or stopping its CLI server interrupts the managed worker; saved paired trials remain resumable.</p>
+      <div id="runner-unavailable" class="notice" hidden>Execution controls are unavailable. Start the project with <code>python main.py --ui</code>.</div>
+      <div id="runner-warnings" class="notice" hidden></div>
+      <form id="run-form" hidden>
+        <div class="parameter-grid">
+          <label for="run-config">Configuration<select id="run-config"></select></label>
+          <label for="run-operation">Operation<select id="run-operation"><option value="new">New experiment</option><option value="resume">Resume selected execution</option><option value="full-rerun">Full rerun of selected execution</option></select></label>
+          <label for="run-models">Models (comma-separated)<input id="run-models" required></label>
+          <label for="run-targets">Cloud / IaC targets (comma-separated)<input id="run-targets" required placeholder="azure-bicep, azure-terraform, aws-terraform"></label>
+          <label for="run-scenarios">Scenarios (comma-separated)<input id="run-scenarios" required></label>
+          <label for="run-repetitions">Repetitions<input id="run-repetitions" type="number" min="1" required></label>
+          <label for="run-iterations">Attempt budget per arm<input id="run-iterations" type="number" min="1" required></label>
+          <label for="run-seed">Schedule seed<input id="run-seed" type="number" required></label>
+          <label for="run-tokens">Maximum output tokens<input id="run-tokens" type="number" min="1" required></label>
+        </div>
+        <p id="run-source" class="micro"></p>
+        <p class="micro">Resume keeps the frozen parameters and completed paired trials. Incomplete trajectories are archived and retried from their shared initial candidate, not continued mid-conversation. Legacy executions without managed checkpoints require a full rerun.</p>
+        <label class="toggle"><input id="run-login" type="checkbox"> Allow browser sign-in if cached Copilot authentication is unavailable</label>
+        <button id="preview-run" type="submit">Preview plan (no model calls)</button>
+        <div id="run-preview" class="notice" hidden></div>
+        <label class="toggle"><input id="confirm-paid" type="checkbox"> I authorize the previewed model calls and any additional interrupted-trial retries.</label>
+        <button id="start-run" type="button" disabled>Start previewed execution</button>
+      </form>
+      <div id="run-error" class="notice error" role="alert" hidden></div>
+      <p id="job-status" role="status" aria-live="polite"></p>
+    </section>
+    <div id="monitor-view">
+    <div class="collapse-controls"><button id="expand-monitor" type="button">Expand all sections</button><button id="collapse-monitor" type="button">Collapse all sections</button></div>
+    <section class="run-controls panel" aria-label="Execution selection">
+      <label class="run-picker" for="run-select">Execution<select id="run-select"><option value="">Loading executions...</option></select></label>
+      <label for="target-filter">Cloud / IaC target<select id="target-filter"></select></label>
+      <div><span id="run-status" class="badge neutral">Connecting</span><p id="updated" class="micro" role="status" aria-live="polite">Reading saved artifacts...</p></div>
+    </section>
+    <div id="error" class="notice error" role="alert" hidden></div>
+    <div id="empty" class="notice" hidden>No executions found. Run a controlled study to see its saved progress here.</div>
+    <div id="dashboard" hidden>
+      <div class="scope"><span id="scope-label"></span><span>Static acceptance is not proof of deployment or network behavior.</span></div>
+      <p id="target-profile" class="micro"></p>
+      <section class="metrics" aria-label="Run progress">
+        <article class="metric"><p class="eyebrow">PAIRED TRIALS</p><p id="trial-count" class="metric-value">--</p><progress id="run-progress" max="100" value="0" aria-label="Completed paired trials"></progress><p id="progress-caption" class="micro"></p></article>
+        <article class="metric"><p class="eyebrow">GENERATION REQUESTS</p><p id="request-count" class="metric-value">--</p><p id="request-caption" class="micro"></p><p class="micro">Saved ledger; shared initial counted once.</p></article>
+        <article class="metric"><p class="eyebrow">ELAPSED WALL TIME</p><p id="elapsed" class="metric-value">--</p><p class="micro">Since run creation; includes idle time.</p><p id="active-job" class="micro"></p></article>
+        <article class="metric"><p class="eyebrow">OPERATIONAL ERRORS</p><p id="error-count" class="metric-value">--</p><p class="micro">Completed condition workflows.</p><p id="generation-failures" class="micro"></p></article>
+      </section>
+      <section class="panel">
+        <div class="section-heading"><div><p class="eyebrow">CONTROLLED COMPARISON</p><h2>Static outcomes</h2></div><label for="model-filter">Model<select id="model-filter"><option value="">All models</option></select></label></div>
+        <p id="outcomes-scope" class="micro">Final artifacts from completed paired trials only. Acceptance requires visible validators and the finite structural contract.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Condition outcomes for the selected model</caption><thead><tr><th scope="col">Condition</th><th scope="col">Accepted</th><th scope="col">Acceptance rate</th><th scope="col">Compilable</th><th scope="col">Mean attempts</th><th scope="col">Mean elapsed</th></tr></thead><tbody id="condition-rows"></tbody></table></div>
+        <p id="comparison" class="comparison"></p>
+      </section>
+      <section class="panel" aria-label="Scenario comparison by model and condition">
+        <div class="section-heading"><div><p class="eyebrow">SCENARIO COMPARISON</p><h2>Selected models / scenario / condition</h2></div>
+          <label for="comparison-metric">Metric<select id="comparison-metric">
+            <option value="accepted">Acceptance</option>
+            <option value="compilationPassed">Compilation / Terraform validation passed</option>
+            <option value="visiblePassed">Visible validators passed</option>
+            <option value="structuralAccepted">Independent structural contract passed</option>
+            <option value="generationFailures">Generation failures</option>
+            <option value="operationalErrors">Operational errors</option>
+          </select></label>
+        </div>
+        <fieldset class="comparison-model-filter"><legend>Models (multi-select)</legend>
+          <div id="comparison-model-options" class="comparison-model-options"></div>
+          <div class="comparison-selection-actions"><button id="comparison-all-models" type="button">All models</button><button id="comparison-clear-models" type="button">Clear selection</button></div>
+        </fieldset>
+        <p id="comparison-selection" class="micro" aria-live="polite"></p>
+        <p id="scenario-comparison-note" class="micro"></p>
+        <div class="table-scroll"><table id="scenario-comparison">
+          <caption class="sr-only">Selected metric counts and percentages by scenario, model and condition</caption>
+          <thead><tr id="scenario-model-headings"></tr><tr id="scenario-condition-headings"></tr></thead>
+          <tbody id="scenario-comparison-rows"></tbody>
+        </table></div>
+        <p class="micro">Selected models are pooled by summing counts and denominators, not averaging percentages. Green = best, red = worst within a scenario; failure metrics prefer lower rates. Ties are explicit and unknown evidence prevents ranking. Arrows use unrounded rates, not statistical significance. Other model/workflow filters do not change this comparison.</p>
+      </section>
+      <div class="two-column">
+        <section class="panel"><div class="section-heading"><div><p class="eyebrow">BENCHMARK COVERAGE</p><h2>Scenarios</h2></div><span class="micro">Completed / planned paired trials</span></div><div id="scenario-grid" class="scenario-grid"></div></section>
+        <section class="panel"><p class="eyebrow">OBSERVED USAGE</p><h2>Tokens &amp; accounting</h2><dl class="usage"><div><dt>Input tokens</dt><dd id="input-tokens">Unknown</dd></div><div><dt>Output tokens</dt><dd id="output-tokens">Unknown</dd></div><div><dt>Requests with usage</dt><dd id="known-usage">--</dd></div><div><dt>Nominal USD estimate</dt><dd id="cost">Unknown</dd></div></dl><p class="micro">Known ledger usage only; missing values are not zero. Copilot uses allowance/credits, not Azure token prices. SDK retries may add inference calls.</p></section>
+      </div>
+      <section class="panel">
+        <p class="eyebrow">WHOLE-EXECUTION USAGE</p><h2>Tokens and performance by model and condition</h2>
+        <h3>Unique generation usage by model</h3>
+        <p class="micro">All cloud/IaC targets. Each saved generation is counted once, including each shared initial candidate once. Missing usage is unknown, not zero. Token totals above and below are observed subtotals when usage is incomplete.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Unique execution token usage by model</caption><thead><tr><th scope="col">Model</th><th scope="col">Requests</th><th scope="col">Input tokens</th><th scope="col">Output tokens</th><th scope="col">Total tokens</th><th scope="col">Usage coverage</th><th scope="col">Generation time</th></tr></thead><tbody id="model-token-rows"></tbody></table></div>
+        <h3>Workflow-attributed usage by model and condition</h3>
+        <p class="micro">Completed workflows across all targets. Each condition includes its shared initial candidate. Do not sum these rows as an execution or billing total. Mean elapsed includes generation, SDK overhead and validation. Copilot dollar costs are unknown; tokens are a usage measure, not an invoice.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Workflow-attributed tokens and performance by model and condition</caption><thead><tr><th scope="col">Model</th><th scope="col">Condition</th><th scope="col">Workflows</th><th scope="col">Input tokens</th><th scope="col">Output tokens</th><th scope="col">Total tokens</th><th scope="col">Usage coverage</th><th scope="col">Mean elapsed</th></tr></thead><tbody id="condition-token-rows"></tbody></table></div>
+      </section>
+      <section class="panel">
+        <div class="section-heading"><div><p class="eyebrow">ARTIFACT-LEVEL RESULTS</p><h2>Completed workflows</h2></div><div class="filters"><label for="scenario-filter">Scenario<select id="scenario-filter"><option value="">All scenarios</option></select></label><label for="outcome-filter">Outcome<select id="outcome-filter"><option value="">All outcomes</option><option value="attention">Needs attention</option><option value="accepted">Accepted</option><option value="unassessed">Awaiting human review</option></select></label></div></div>
+        <p id="row-count" class="micro"></p>
+        <div class="table-scroll workflow-scroll"><table><caption class="sr-only">Saved outcomes and diagnostics for each condition workflow</caption><thead><tr><th scope="col">Scenario / rep</th><th scope="col">Model</th><th scope="col">Condition</th><th scope="col">Compile / validate</th><th scope="col">Checkov</th><th scope="col">Conftest</th><th scope="col">Outcome / checks</th></tr></thead><tbody id="trial-rows"></tbody></table></div>
+      </section>
+      <section id="warnings" class="notice" aria-label="Data availability warnings" hidden></section>
+      <section id="workflow-detail" class="panel" aria-label="Workflow outcome explanation" hidden>
+        <div class="section-heading"><div><p class="eyebrow">RECORDED OUTCOME EXPLANATION</p><h2 id="detail-title">Workflow details</h2></div><button id="close-detail" type="button">Close details</button></div>
+        <p id="detail-summary" class="notice" role="status" aria-live="polite"></p>
+        <p id="detail-attempts" class="micro"></p>
+        <h3>Separate acceptance gates</h3><div id="detail-gates"></div>
+        <h3>Why generation or refinement stopped</h3><p id="detail-stopping"></p>
+        <p id="detail-pairing" class="micro"></p>
+        <h3>Independent scenario checks</h3><p class="micro">These are benchmark requirements, separate from compilation and policy checks. A strict resource allowlist is not a general judgment of infrastructure quality.</p>
+        <div id="detail-checks"></div>
+        <div id="detail-policies"></div>
+        <div id="detail-warnings" class="notice" hidden></div>
+        <nav id="detail-artifacts" aria-label="Download workflow evidence"></nav>
+      </section>
+      <footer class="panel footer"><div><strong>Saved evidence</strong><p id="run-path" class="micro mono"></p></div><nav aria-label="Download saved evidence"><a href="/api/download/manifest" download>Manifest</a><a href="/api/download/calls" download>Call ledger</a><a id="summary-link" href="/api/download/summary" download>Final summary</a></nav></footer>
+      <section class="panel" aria-label="Best condition for selected models">
+        <p class="eyebrow">BEST OBSERVED CONDITION</p><h2>Best condition for selected models</h2>
+        <p id="best-condition-summary" class="notice" aria-live="polite"></p>
+        <p id="best-condition-scope" class="micro"></p>
+        <div class="table-scroll"><table><caption class="sr-only">Conditions ranked by the selected comparison metric, pooled across selected models and all scenarios</caption>
+          <thead><tr><th scope="col">Condition</th><th id="best-condition-metric" scope="col">Selected metric</th><th scope="col">Observed rank</th><th scope="col">Mean attempts</th><th scope="col">Mean elapsed</th><th scope="col">Operational errors</th></tr></thead><tbody id="best-condition-rows"></tbody>
+        </table></div>
+        <p class="micro">Ranking follows the matrix metric. Requirements-only studies default to visible validator passes; acceptance and structural assessment remain unassessed, not zero. Ties are not broken using latency or attempts. This ranks a condition for one measured outcome, not overall quality or an individual artifact. More-complete model/scenario groups have greater weight; partial runs can change the leader. Conditions share initial candidates. These descriptive results do not establish significance, runtime correctness or general model superiority.</p>
+      </section>
+      <p class="footnote">Polling reads local artifacts only. A recorded "started" status is not a process heartbeat. Preliminary differences are not significance tests.</p>
+    </div>
+    </div>
+  </main>
+</body>
+</html>

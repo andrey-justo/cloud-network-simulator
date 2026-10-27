@@ -4,6 +4,25 @@ from collections.abc import Callable
 from typing import Any
 
 
+def render_requirements(specification: dict[str, Any]) -> str:
+    lines = [specification["name"], "", specification["objective"]]
+    components = specification.get("required_components", {})
+    if components:
+        lines.extend(["", "Required capabilities:"])
+        lines.extend(f"- {name.replace('_', ' ')}: {description}" for name, description in components.items())
+    for field, heading in (
+        ("acceptance_criteria", "Requirements"),
+        ("connectivity_requirements", "Required connectivity"),
+        ("security_requirements", "Security requirements"),
+        ("architectural_requirements", "Architectural constraints"),
+    ):
+        values = specification.get(field, [])
+        if values:
+            lines.extend(["", f"{heading}:"])
+            lines.extend(f"- {value}" for value in values)
+    return "\n".join(lines) + "\n"
+
+
 def resolve_scenario_context(
     scenario_id: str,
     load_spec: Callable[[str], dict[str, Any]],

@@ -1,0 +1,10 @@
+name: Separate application and database namespaces
+objective: Maintain distinct private DNS namespaces for application and database services.
+family: dns
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Application and database services use different private namespaces.
+  - Authorized private workloads can resolve the required service names.
+security_requirements:
+  - Neither namespace is publicly hosted.
+  - DNS configuration must not introduce public database access.

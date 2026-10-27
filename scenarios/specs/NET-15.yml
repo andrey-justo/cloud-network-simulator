@@ -1,0 +1,10 @@
+name: Network address expansion
+objective: Accommodate a second private address range without replacing the original network.
+family: addressing
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Existing and additional private address ranges are nonoverlapping.
+  - Workloads can be placed in both address ranges.
+  - Subnet addresses belong to their corresponding network ranges.
+architectural_requirements:
+  - Preserve the original address range.

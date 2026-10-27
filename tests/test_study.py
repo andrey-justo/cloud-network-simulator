@@ -21,6 +21,163 @@ from network_simulation.study_cloud import AzureStudyBackend
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("pass_visible", [False, True])
+def test_human_requirements_do_not_use_oracle_or_fabricate_acceptance(tmp_path, monkeypatch, pass_visible):
+    from network_simulation.study_state import read_checkpoint
+
+    runner, prompts = make_runner(tmp_path, pass_visible=pass_visible)
+    runner.config.study.assessment_mode = "human_review"
+    monkeypatch.setattr("network_simulation.study.evaluate_structure", lambda *args: pytest.fail("No resource-shape oracle"))
+    monkeypatch.setattr("network_simulation.study.scenario_contract", lambda *args: pytest.fail("No resource-shape answer key"))
+    result = runner.run(["NET-01"])
+    for condition in result["trials"][0]["conditions"].values():
+        assert condition["accepted"] is None
+        assert condition["structural_accepted"] is None
+        assert condition["requirement_assessment"]["status"] == "awaiting_human_review"
+        assert condition["visible_checks_passed"] is pass_visible
+        assert all(value["status"] == "not_assessed" for value in condition["structural_evaluations"])
+    assert "Requirements:\n- " in prompts[0]
+    assert "acceptance_criteria:" not in prompts[0]
+    assert "required_components:" not in prompts[0]
+    assert "benchmark-" not in prompts[0]
+    summary = result["summary"]["models"][runner.config.llm.model_name]
+    for condition in summary["conditions"].values():
+        assert condition["accepted"] is None
+        assert condition["acceptance_rate"] is None
+        assert condition["structural_acceptance_rate"] is None
+        assert condition["acceptance_unassessed"] == 1
+    assert all(value["paired_risk_difference"] is None for value in summary["paired_comparisons"].values())
+    directory = Path(result["output_directory"])
+    assert read_checkpoint(directory)["manifest"]["trials"] == result["trials"]
+    review = json.loads((directory / "trial-00001" / "requirements-review.json").read_text())
+    assert review["status"] == "awaiting_human_review"
+    assert runner.run(["NET-01"], resume_from=directory) == result
+    checkpoint = json.loads((directory / "checkpoint.json").read_text())
+    checkpoint["manifest"]["trials"][0]["conditions"]["one_shot"]["requirement_assessment"] = None
+    (directory / "checkpoint.json").write_text(json.dumps(checkpoint))
+    with pytest.raises(ValueError):
+        read_checkpoint(directory)
+
+
+def test_unique_usage_and_condition_attribution_keep_partial_observations(tmp_path):
+    class Client:
+        calls = 0
+        last_usage = None
+
+        def __call__(self, prompt):
+            self.calls += 1
+            self.last_usage = {"input_tokens": 10, "output_tokens": 5} if self.calls % 2 else None
+            return "// mocked candidate"
+
+    runner, _ = make_runner(tmp_path, client=Client())
+    result = runner.run(["NET-01"])
+    usage = result["summary"]["usage"]
+    assert usage["unique_execution"]["input_tokens"] == 30
+    assert usage["unique_execution"]["output_tokens"] == 15
+    assert usage["unique_execution"]["known_requests"] == 3
+    assert usage["unique_execution"]["unknown_requests"] == 2
+    assert usage["unique_by_model"][runner.config.llm.model_name] == usage["unique_execution"]
+    conditions = result["trials"][0]["conditions"]
+    assert sum(value["usage_accounting"]["input_tokens"] for value in conditions.values()) == 50
+    for arm in ("blind_refinement", "tool_feedback"):
+        assert conditions[arm]["usage"] is None
+        assert conditions[arm]["usage_accounting"]["known_requests"] == 2
+        assert conditions[arm]["usage_accounting"]["unknown_requests"] == 1
+        summary = usage["workflow_by_model_condition"][runner.config.llm.model_name][arm]
+        assert summary["input_tokens"] == 20
+        assert summary["mean_elapsed_seconds"] == conditions[arm]["elapsed_seconds"]
+
+
+def test_resume_preserves_completed_pairs_and_archives_partial_generations(tmp_path, monkeypatch):
+    runner, prompts = make_runner(tmp_path, pass_visible=True, repetitions=2)
+    original_trial = runner._trial
+    attempts = 0
+
+    def interrupt_second(job, scenario, directory):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 2:
+            runner._generate(job["model"], "interrupted prompt", directory / "shared-initial")
+            raise KeyboardInterrupt()
+        return original_trial(job, scenario, directory)
+
+    monkeypatch.setattr(runner, "_trial", interrupt_second)
+    with pytest.raises(KeyboardInterrupt):
+        runner.run(["NET-01"])
+    directory = next((tmp_path / "results").glob("study-*"))
+    before = json.loads((directory / "checkpoint.json").read_text())
+    frozen = deepcopy(before["manifest"]["trials"][0])
+    assert len(before["calls"]) == 1
+    resumed, new_prompts = make_runner(tmp_path, pass_visible=True, repetitions=2)
+    result = resumed.run(["NET-01"], resume_from=directory)
+    assert result["status"] == "completed"
+    assert len(new_prompts) == 1
+    assert len(result["trials"]) == 2
+    assert result["trials"][0] == frozen
+    ledger = json.loads((directory / "calls.json").read_text())
+    assert len(ledger) == 3
+    assert sum(call.get("excluded_from_completed_trials", False) for call in ledger) == 1
+    archive = Path(result["resume_history"][0]["archived_partial_trials"][0])
+    assert (archive / "shared-initial" / "prompt.txt").read_text() == "interrupted prompt"
+    assert result["maximum_generation_requests"] == 11
+    assert result["physical_model_calls"] is None
+
+
+def test_resume_completed_run_is_a_noop_and_lock_prevents_concurrent_access(tmp_path):
+    from network_simulation.study_state import execution_lock
+
+    runner, prompts = make_runner(tmp_path, pass_visible=True)
+    result = runner.run(["NET-01"])
+    directory = Path(result["output_directory"])
+    checkpoint = (directory / "checkpoint.json").read_bytes()
+    again = runner.run(["NET-01"], resume_from=directory)
+    assert again == result
+    assert len(prompts) == 1
+    assert (directory / "checkpoint.json").read_bytes() == checkpoint
+    with execution_lock(directory), pytest.raises(ValueError, match="already running"):
+        runner.run(["NET-01"], resume_from=directory)
+
+
+def test_resume_rejects_parameter_changes_and_legacy_runs(tmp_path):
+    runner, _ = make_runner(tmp_path, pass_visible=True)
+    result = runner.run(["NET-01"])
+    directory = Path(result["output_directory"])
+    runner.config.study.repetitions = 2
+    with pytest.raises(ValueError, match="frozen study field changed"):
+        runner.run(["NET-01"], resume_from=directory)
+    (directory / "checkpoint.json").unlink()
+    with pytest.raises(ValueError, match="Legacy runs"):
+        runner.run(["NET-01"], resume_from=directory)
+
+
+def test_resume_recovers_authoritative_checkpoint_and_unknown_inflight_attempt(tmp_path, monkeypatch):
+    runner, _ = make_runner(tmp_path, pass_visible=True, repetitions=2)
+    original = runner._trial
+    calls = 0
+
+    def interrupted(job, scenario, directory):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            candidate = directory / "shared-initial"
+            candidate.mkdir(parents=True)
+            (candidate / "prompt.txt").write_text("unknown in-flight request")
+            raise KeyboardInterrupt()
+        return original(job, scenario, directory)
+
+    monkeypatch.setattr(runner, "_trial", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        runner.run(["NET-01"])
+    directory = next((tmp_path / "results").glob("study-*"))
+    (directory / "manifest.json").write_text("{")
+    (directory / "calls.json").write_text("{")
+    resumed, _ = make_runner(tmp_path, pass_visible=True, repetitions=2)
+    result = resumed.run(["NET-01"], resume_from=directory)
+    assert result["unknown_interrupted_requests"] == 1
+    assert result["generation_requests"] == 2
+    assert result["maximum_generation_requests"] == 11
+
+
 def contract_template(key):
     contract = scenario_contract(key)
 
@@ -421,7 +578,7 @@ def test_cli_catalog_and_dry_run_do_not_create_clients_or_run_validators(
     )
     assert main(["--workspace", str(ROOT), "--validate-catalog"]) == 0
     catalog = json.loads(capsys.readouterr().out)
-    assert len(catalog["scenarios"]) == 10
+    assert len(catalog["scenarios"]) == 29
     assert (
         main(
             [

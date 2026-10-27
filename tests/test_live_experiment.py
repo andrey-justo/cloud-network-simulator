@@ -139,6 +139,28 @@ def check_report(*, passed=1, failed=0, skipped=0, parsing_errors=0):
     }
 
 
+@pytest.mark.parametrize(("passed", "skipped", "results", "status"), [
+    (2, 0, [{"check_id": "CKV_AZURE_9", "result": "passed"}, {"check_id": "CKV_AZURE_10", "result": "passed"}], "passed"),
+    (1, 0, [{"check_id": "CKV_AZURE_9", "result": "passed"}], "failed"),
+    (1, 1, [{"check_id": "CKV_AZURE_9", "result": "passed"}, {"check_id": "CKV_AZURE_10", "result": "skipped"}], "failed"),
+    (0, 0, [], "failed"),
+])
+def test_scoped_baseline_requires_execution_without_suppression(tmp_path, passed, skipped, results, status):
+    report = {**check_report(passed=passed, skipped=skipped), "results": results}
+    runner, _ = make_runner(tmp_path, report=report)
+    required = ["CKV_AZURE_9", "CKV_AZURE_10"]
+    outcome = runner.validate_checkov(tmp_path / "template.json", "CASE-01", "arm", checks=required, required_checks=required)
+    assert outcome["status"] == status
+    assert bool(outcome["baseline_error"]) == (status == "failed")
+    assert outcome["required_check_ids"] == required
+
+
+def test_scoped_baseline_rejects_missing_result_evidence(tmp_path):
+    runner, _ = make_runner(tmp_path, report=check_report())
+    with pytest.raises(ValueError, match="result details are missing"):
+        runner.validate_checkov(tmp_path / "template.json", "CASE-01", "arm", checks=["CKV_AZURE_9"])
+
+
 @pytest.mark.parametrize(("report", "status"), [
     (check_report(passed=0), "no_checks_executed"),
     (check_report(passed=0, skipped=3), "no_checks_executed"),

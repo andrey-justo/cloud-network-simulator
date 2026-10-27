@@ -1,0 +1,10 @@
+name: Stable private DNS alias
+objective: Give an internal service a stable alias independent of its canonical DNS name.
+family: dns
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - A private service alias resolves through a canonical internal service name.
+  - Both names are available to the intended private workloads.
+  - The alias does not resolve through a public namespace.
+architectural_requirements:
+  - Use a DNS alias rather than duplicating the service address in two independent records.

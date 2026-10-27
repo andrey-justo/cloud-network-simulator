@@ -31,12 +31,29 @@ class LLMConfig:
 
     @property
     def generation_settings(self) -> dict[str, float | int]:
+        if self.provider == "copilot" and (
+            self.temperature is not None or self.top_p is not None
+        ):
+            raise ValueError(
+                "Copilot does not expose temperature or top_p; leave them unset."
+            )
         settings: dict[str, float | int] = {"max_output_tokens": self.max_tokens}
         if self.temperature is not None:
             settings["temperature"] = self.temperature
         if self.top_p is not None:
             settings["top_p"] = self.top_p
         return settings
+
+    @property
+    def authentication_mode(self) -> str:
+        return "github_copilot" if self.provider == "copilot" else self.azure_auth_mode
+
+    def discover_models(self, *, allow_login: bool = False) -> list[str]:
+        if self.provider == "copilot":
+            from network_simulation.copilot_client import CopilotGenerationClient
+
+            return CopilotGenerationClient.list_models(allow_login=allow_login)
+        return self.available_models.copy()
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -104,6 +121,13 @@ class LLMConfig:
         )
 
     def create_client(self):
+        if self.provider == "copilot":
+            from network_simulation.copilot_client import CopilotGenerationClient
+
+            self.generation_settings
+            return CopilotGenerationClient(
+                model=self.model_name, max_output_tokens=self.max_tokens
+            )
         if self.provider != "azure_responses":
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
         if self.model_name not in self.available_models:

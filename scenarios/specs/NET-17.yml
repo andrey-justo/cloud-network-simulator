@@ -1,0 +1,9 @@
+name: Private service namespace
+objective: Give internal services a DNS namespace that is available only to private workloads.
+family: dns
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Internal workloads can use a private DNS namespace.
+  - The namespace is associated with the intended private network.
+security_requirements:
+  - Do not publish the namespace as a public DNS zone.

@@ -1,0 +1,25 @@
+poc:
+  name: Human-written network requirements - static observations and human review
+experiment:
+  phase: main
+  scenarios: [NET-01, NET-02, NET-03, NET-04, NET-05, NET-06, NET-07, NET-08, NET-09, NET-10, NET-11, NET-12, NET-13, NET-14, NET-15, NET-16, NET-17, NET-18, NET-19, NET-20, NET-21, NET-22, NET-23, NET-24, NET-25, NET-26, NET-27, NET-28, NET-29, NET-30]
+  output_directory: results/human-requirements
+study:
+  assessment_mode: human_review
+  repetitions: 1
+  max_iterations: 5
+  random_seed: 1729
+  models: [gpt-5.3-codex, gpt-6.1-sol]
+  targets: [azure-bicep, azure-terraform, aws-terraform]
+  bootstrap_samples: 2000
+llm:
+  provider: copilot
+  model: gpt-5.3-codex
+  max_tokens: 12000
+validation:
+  bicep_syntax: true
+  validate_terraform_syntax: true
+  checkov: true
+  opa: false
+cloud:
+  enabled: false

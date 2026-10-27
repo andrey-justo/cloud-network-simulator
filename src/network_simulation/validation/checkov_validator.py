@@ -13,6 +13,7 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional, List
 import logging
+from network_simulation.validation.environment import isolated_environment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,12 +63,15 @@ class ValidationReport:
 class CheckovValidator:
     """Valida templates IaC usando Checkov"""
 
-    def __init__(self, framework: str = "bicep"):
+    def __init__(self, framework: str = "bicep", checks: list[str] | None = None):
         """
         Args:
             framework: 'bicep' ou 'terraform'
         """
         self.framework = framework
+        if checks is not None and (not isinstance(checks,list) or not checks or any(not isinstance(check,str) or not check.startswith("CKV") for check in checks)):
+            raise ValueError("Provide a nonempty list of Checkov check identifiers.")
+        self.checks = checks
         if not is_checkov_available():
             raise RuntimeError("Checkov not found. Install with: pip install checkov")
 
@@ -101,6 +105,12 @@ class CheckovValidator:
             "--output", "json",
             "--quiet"
         ]
+        if self.checks is not None:
+            config_path = template_file.parent / "checkov-baseline.yaml"
+            config_path.write_text("{}\n", encoding="utf-8")
+            cmd.remove("--quiet")
+            cmd.extend(["--check",",".join(self.checks),"--skip-download","--skip-results-upload","--config-file",str(config_path)])
+        environment = isolated_environment() if self.checks is not None else None
 
         # Adicionar checks customizados se fornecido
         if custom_checks_dir:
@@ -115,9 +125,10 @@ class CheckovValidator:
                     capture_output=True,
                     text=True,
                     check=False,
+                    **({"env":environment} if environment is not None else {}),
                 )
             else:
-                result = self._run_python_module(cmd)
+                result = self._run_python_module(cmd,**({"environment":environment} if environment is not None else {}))
 
             if result.returncode not in (0, 1):
                 raise RuntimeError(
@@ -155,7 +166,7 @@ class CheckovValidator:
             raise
 
     @staticmethod
-    def _run_python_module(arguments: List[str]) -> subprocess.CompletedProcess[str]:
+    def _run_python_module(arguments: List[str], *, environment: dict[str,str] | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
@@ -166,6 +177,7 @@ class CheckovValidator:
             capture_output=True,
             text=True,
             check=False,
+            **({"env":environment} if environment is not None else {}),
         )
 
     def _parse_checkov_output(

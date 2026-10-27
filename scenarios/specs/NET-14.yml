@@ -1,0 +1,12 @@
+name: Hub and isolated spokes
+objective: Connect two spoke networks to a shared hub without enabling direct spoke transit.
+family: peering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Each spoke can reach shared services in the hub privately.
+  - All network address ranges are disjoint.
+connectivity_requirements:
+  - Hub to each spoke is allowed.
+  - Direct traffic between the two spokes is blocked.
+architectural_requirements:
+  - Do not assume that connecting networks to the hub automatically provides transit.

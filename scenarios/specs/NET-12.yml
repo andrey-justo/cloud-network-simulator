@@ -1,0 +1,11 @@
+name: Three-tier private address partitioning
+objective: Separate web, application and database workloads into distinct address ranges.
+family: addressing
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Each tier has its own subnet.
+  - Tier address ranges do not overlap and belong to the same private network.
+architectural_requirements:
+  - Leave address space available for future expansion.
+security_requirements:
+  - Application and database workloads do not receive public addresses.

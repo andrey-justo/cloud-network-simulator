@@ -1,0 +1,11 @@
+name: Application-to-database isolation
+objective: Allow application workloads to reach a private database while denying other clients.
+family: filtering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Application workloads can connect to the database on TCP port 5432.
+  - Other sources cannot initiate connections to the database.
+connectivity_requirements:
+  - Internet to database is blocked.
+security_requirements:
+  - The database workload has no public address.

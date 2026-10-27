@@ -1,0 +1,11 @@
+name: Shared private DNS across networks
+objective: Make a common internal namespace available to two separate private networks.
+family: dns
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Both networks can resolve records in the same private namespace.
+  - The two network address ranges do not overlap.
+architectural_requirements:
+  - Sharing DNS must not implicitly grant network connectivity between workloads.
+security_requirements:
+  - The shared namespace is not public.

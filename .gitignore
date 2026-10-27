@@ -51,7 +51,19 @@ reports/study-*/
 results/*
 !results/.gitkeep
 logs/
+.tools/
 *.log
+
+# LaTeX paper build products (sources and aggregate data remain versionable)
+docs/paper/*.aux
+docs/paper/*.bbl
+docs/paper/*.blg
+docs/paper/*.fdb_latexmk
+docs/paper/*.fls
+docs/paper/*.out
+docs/paper/*.pdf
+docs/paper/*.synctex.gz
+docs/paper/*.toc
 
 # Jupyter
 .ipynb_checkpoints/

@@ -1,0 +1,10 @@
+name: DNS-only workload egress
+objective: Permit a private workload to contact approved DNS resolvers but no other destinations.
+family: egress
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - TCP and UDP port 53 are allowed to explicitly selected private resolvers.
+  - Other new outbound traffic is blocked.
+security_requirements:
+  - DNS access must not permit arbitrary destinations or unrelated ports.
+  - The workload has no public address.

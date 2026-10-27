@@ -177,9 +177,10 @@ def test_prepared_batches_have_the_exact_requested_shape(
     assert plan["models"] == ["gpt-5.3-codex", "gpt-6.1-sol"]
     assert len(plan["schedule"]) == trials
     assert len(plan["scenarios"]) == scenarios
-    assert plan["maximum_physical_model_calls"] == calls
+    assert plan["maximum_generation_requests"] == calls
+    assert plan["maximum_physical_model_calls"] is None
     assert plan["maximum_cloud_deployments"] == 0
-    assert plan["authentication_mode"] == "azure_cli"
+    assert plan["authentication_mode"] == "github_copilot"
     assert plan["paid_execution"] is False
 
 

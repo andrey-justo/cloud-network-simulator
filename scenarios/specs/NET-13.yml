@@ -1,0 +1,11 @@
+name: Private connectivity between two networks
+objective: Connect two independently addressed networks using private connectivity.
+family: peering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Network address ranges do not overlap.
+  - Private traffic can travel in both directions between the networks.
+connectivity_requirements:
+  - A workload in either network can reach a workload in the other privately.
+security_requirements:
+  - Connectivity must not depend on public workload addresses.

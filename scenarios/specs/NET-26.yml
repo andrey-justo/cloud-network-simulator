@@ -1,0 +1,13 @@
+name: Stateful three-tier filtering
+objective: Enforce least-privilege communication among private web, application and database tiers.
+family: filtering
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - Web workloads can initiate application connections on TCP port 8080.
+  - Application workloads can initiate database connections on TCP port 5432.
+  - Return traffic for permitted connections is allowed.
+connectivity_requirements:
+  - Web to database is blocked.
+  - Other unsolicited inter-tier connections are blocked.
+security_requirements:
+  - All three workload roles remain privately addressed.

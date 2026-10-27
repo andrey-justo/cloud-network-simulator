@@ -1,0 +1,12 @@
+name: Private access to S3
+objective: Allow AWS workloads to access approved S3 storage without Internet or NAT transit.
+family: service-integration
+supported_targets: [aws-terraform]
+acceptance_criteria:
+  - The workload subnet routes S3 traffic through private gateway-endpoint connectivity.
+  - Access is restricted to explicitly approved S3 storage.
+  - S3 access does not require a public workload address.
+security_requirements:
+  - Do not add a default Internet route solely to enable S3 access.
+architectural_requirements:
+  - This scenario does not claim equivalence with Azure service endpoints or Private Link.

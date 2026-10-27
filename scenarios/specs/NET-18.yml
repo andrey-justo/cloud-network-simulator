@@ -1,0 +1,9 @@
+name: Private application name resolution
+objective: Resolve an internal application name to its private IPv4 address.
+family: dns
+supported_targets: [azure-bicep, azure-terraform, aws-terraform]
+acceptance_criteria:
+  - The application has a private DNS name and IPv4 address record.
+  - Workloads in the intended network can resolve the name.
+security_requirements:
+  - The application address must not be published through public DNS.
